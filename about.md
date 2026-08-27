@@ -7,7 +7,7 @@ description: "t1m3: abro hardware, tiro firmware e caço vulnerabilidade."
 
 <p data-en="I&#x27;m t1m3. I open hardware, dig into what I find, and write about what&#x27;s inside. ISP routers, robot vacuums, cameras, whatever lands on the bench. All bought with my own money.">Sou o t1m3. Eu abro hardware, fuço no que encontro e escrevo sobre o que tem lá dentro. Roteador da operadora, robô aspirador, câmera, o que cair na bancada. Tudo comprado por mim.</p>
 
-<p data-en="By day I&#x27;m a Cybersecurity Engineer, in vuln management and on the red team&#x27;s Suicide Squad. This is what I do outside of it.">No trampo sou Cybersecurity Engineer, em vuln management e no Suicide Squad do red team. Aqui é o que eu faço fora dele.</p>
+<p data-en="I work as a Cybersecurity Engineer, in vuln management and on the red team&#39;s Suicide Squad.">Trabalho como Cybersecurity Engineer, em vuln management e no Suicide Squad do red team.</p>
 
 <p data-en="This is where I log what I find. No tutorials, no fluff.">Aqui eu anoto o que acho. Sem tutorial, sem remédia.</p>
 
