@@ -2,39 +2,41 @@
 layout: page
 title: about
 permalink: /about/
-description: t1m3 — pesquisador de hardware hacking, engenharia reversa de firmware e análise de vulnerabilidades.
+description: "t1m3: abro hardware, tiro firmware e caço vulnerabilidade."
 ---
 
-`t1m3` — pesquisador de **hardware hacking**, engenharia reversa de firmware e
-análise de vulnerabilidades. Brasil. O que aparece aqui é trabalho de bancada:
-soldar UART num extender, dumpar SPI NAND sob lupa, brigar com NFTL, ler ELF
-stripado, desmontar bytecode Dalvik — do artefato fechado até o PoC.
+Sou o t1m3. Passo o tempo abrindo hardware pra ver o que tem dentro: roteador da
+operadora, robô aspirador, câmera, o que cair na bancada. Solto o firmware, leio
+o binário, desmonto o APK, e vou até entender o que aquilo faz de verdade.
+
+Todo device aqui é meu, comprado pra isso. E isso aqui é onde eu anoto o que
+encontro. Sem tutorial, sem remédia de PDF.
 
 <div class="minis two">
   <div class="mini">
-    <div class="mh">foco</div>
+    <div class="mh">o que eu faço</div>
     <ul>
-      <li><b>Extração de firmware</b> — UART, SPI-NOR/NAND, eMMC, chip-off</li>
-      <li><b>Engenharia reversa</b> — binário nativo ARM/MIPS, bytecode Dalvik/APK</li>
-      <li><b>Descoberta de vulns</b> — CPE de operadora, IoT, roteadores SOHO</li>
-      <li><b>Disclosure coordenado</b> — vendor primeiro, prazo, depois o paper</li>
+      <li>Tiro firmware: <b>UART, SPI-NOR/NAND, eMMC, chip-off</b></li>
+      <li>Reverto binário: <b>ARM/MIPS nativo, Dalvik/APK</b></li>
+      <li>Acho vuln em CPE de operadora, IoT e roteador SOHO</li>
+      <li>Reporto pro vendor antes de escrever qualquer coisa</li>
     </ul>
   </div>
   <div class="mini">
-    <div class="mh">postura</div>
+    <div class="mh">como eu penso</div>
     <ul>
-      <li>Se está <b>embarcado no artefato, está vazado</b> — chave, credencial, token</li>
-      <li>Proteção <b>homogênea é ilusão</b>: mesma chave na frota inteira</li>
-      <li>CVE é <b>subproduto</b> do trabalho de leitura, não o objetivo</li>
-      <li>Nada de remédia de PDF — aqui é o caminho até o PoC</li>
+      <li>Tá embarcado no artefato? Então tá vazado. Chave, credencial, token, tudo</li>
+      <li>A mesma chave na frota inteira destranca a frota inteira</li>
+      <li>CVE é o que sobra de ler código, não o alvo</li>
+      <li>Se cansa a vista ou não vira PoC, não me interessa</li>
     </ul>
   </div>
 </div>
 
 ## CVEs
 
-Vulnerabilidades atribuídas, todas no ZTE ZXHN F689 V9 (ONT da Claro Brasil).
-Write-up completo em [Vulnerabilidades no Roteador do Meu Provedor](/papers/zte-zxhn-f689-v9/).
+Saíram todas de um roteador só, o ZTE ZXHN F689 V9 que a Claro me deu de brinde.
+Como cheguei nelas tá no [paper do ZTE](/papers/zte-zxhn-f689-v9/).
 
 <div class="cve-list">
   <div class="cve"><span class="id">CVE-2026-49005</span><span class="tgt">ZTE ZXHN F689 V9</span><span class="cvss">CVSS 2.4</span></div>
@@ -43,23 +45,23 @@ Write-up completo em [Vulnerabilidades no Roteador do Meu Provedor](/papers/zte-
   <div class="cve"><span class="id">CVE-2026-49008</span><span class="tgt">ZTE ZXHN F689 V9</span><span class="cvss">CVSS 6.5</span></div>
 </div>
 
-## Contato
+## Fala comigo
 
-Para report sensível, disclosure coordenado ou verificação de autoria, **cifre**.
+Quer me mandar algo sensível? Cifra. O resto pode vir em claro, mas eu prefiro cifrado.
 
 <div class="minis two">
   <div class="mini">
     <div class="mh">pgp</div>
     <ul>
       <li class="kv"><b>t1m3 &lt;t1m3@segfault.net&gt;</b></li>
-      <li>Chave pública e fingerprint em <a href="/pgp/">/pgp</a></li>
+      <li>Chave e fingerprint em <a href="/pgp/">/pgp</a></li>
     </ul>
   </div>
   <div class="mini">
     <div class="mh">xmpp / omemo</div>
     <ul>
       <li class="kv"><b>redstone@pwned.life</b></li>
-      <li>Cifre qualquer coisa que envolva alvo não publicado</li>
+      <li>É o jeito mais rápido de me achar</li>
     </ul>
   </div>
 </div>

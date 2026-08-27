@@ -5,9 +5,9 @@ permalink: /pgp/
 description: Chave pública PGP de t1m3 para report sensível e disclosure coordenado.
 ---
 
-Chave pública para report sensível, disclosure coordenado e verificação de
-autoria. **Cifre qualquer coisa que envolva alvo não publicado.** Verifique o
-fingerprint por um segundo canal antes de confiar na chave.
+Minha chave pública. Usa pra me mandar report, tratar disclosure, ou conferir
+que fui eu que assinei. Se envolve alvo que ainda não saiu, **cifra**. E confere
+o fingerprint por outro canal antes de confiar nela.
 
 <div class="minis two">
   <div class="mini">
