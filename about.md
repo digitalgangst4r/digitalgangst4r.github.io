@@ -9,8 +9,6 @@ description: "t1m3: abro hardware, tiro firmware e caço vulnerabilidade."
 
 <p data-en="I work as a Cybersecurity Engineer, in vuln management and on the red team&#39;s Suicide Squad.">Trabalho como Cybersecurity Engineer, em vuln management e no Suicide Squad do red team.</p>
 
-<p data-en="This is where I log what I find. No tutorials, no fluff.">Aqui eu anoto o que acho. Sem tutorial, sem remédia.</p>
-
 <div class="minis two">
   <div class="mini">
     <div class="mh" data-en="what I do">o que eu faço</div>
