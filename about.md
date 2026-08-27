@@ -52,7 +52,7 @@ Quer me mandar algo sensível? Cifra. O resto pode vir em claro, mas eu prefiro 
   <div class="mini">
     <div class="mh">pgp</div>
     <ul>
-      <li class="kv"><b>t1m3 &lt;t1m3@segfault.net&gt;</b></li>
+      <li class="kv"><b>t1m3 &lt;t1m3@gatonet.club&gt;</b></li>
       <li>Chave e fingerprint em <a href="/pgp/">/pgp</a></li>
     </ul>
   </div>
