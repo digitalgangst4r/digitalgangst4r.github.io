@@ -5,12 +5,11 @@ permalink: /about/
 description: "t1m3: abro hardware, tiro firmware e caço vulnerabilidade."
 ---
 
-Sou o t1m3. Passo o tempo abrindo hardware pra ver o que tem dentro: roteador da
-operadora, robô aspirador, câmera, o que cair na bancada. Solto o firmware, leio
-o binário, desmonto o APK, e vou até entender o que aquilo faz de verdade.
+Sou o t1m3. Eu abro hardware, fuço no que encontro e escrevo sobre o que tem lá
+dentro. Roteador da operadora, robô aspirador, câmera, o que cair na bancada.
+Tudo comprado por mim.
 
-Todo device aqui é meu, comprado pra isso. E isso aqui é onde eu anoto o que
-encontro. Sem tutorial, sem remédia de PDF.
+Aqui eu anoto o que acho. Sem tutorial, sem remédia.
 
 <div class="minis two">
   <div class="mini">
