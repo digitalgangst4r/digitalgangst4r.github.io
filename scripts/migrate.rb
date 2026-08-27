@@ -18,9 +18,11 @@ FileUtils.mkdir_p(POSTS)
 CONFIG = [
   { src: "LDRobot_LR852K.md",   slug: "kabum-smart-900-ldrobot-lr852k",
     date: "2026-08-17 12:00:00 -0300",
+    title: "Análise de Segurança de Firmware no Kabum Smart 900 (LDRobot LR852K)",
     tags: %w[firmware iot reverse-engineering spi-nand tuya] },
   { src: "ZTE_ZXHN_F689_V9.md", slug: "zte-zxhn-f689-v9",
     date: "2026-08-07 12:00:00 -0300",
+    title: "Vulnerabilidades no Roteador do Meu Provedor: ZTE ZXHN F689 V9",
     tags: %w[firmware roteador cve reverse-engineering] },
   { src: "UART-RE305.md",       slug: "tp-link-re305-uart",
     date: "2026-05-27 12:00:00 -0300",
@@ -66,15 +68,15 @@ CONFIG.each do |c|
   raise "faltando #{src}" unless File.exist?(src)
   body = File.read(src, encoding: "UTF-8")
 
-  # 1) título = primeiro H1; remove a linha do corpo
-  title = nil
+  # 1) título: override do CONFIG se houver; senão o primeiro H1.
+  #    Em qualquer caso remove o H1 do corpo (o layout renderiza o título).
+  h1 = nil
   body = body.sub(/\A\s*/, "")
   if body =~ /\A\#\s+(.+?)\s*\r?\n/
-    title = $1.strip
-    body  = body.sub(/\A\#\s+.+?\r?\n/, "")
-  else
-    title = c[:slug]
+    h1   = $1.strip
+    body = body.sub(/\A\#\s+.+?\r?\n/, "")
   end
+  title = c[:title] || h1 || c[:slug]
   body = body.sub(/\A\s*\r?\n+/, "")   # tira linhas em branco iniciais
 
   # 2) imagens: baixa e reescreve caminho (dropando align="center")

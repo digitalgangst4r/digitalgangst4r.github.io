@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Análise de Segurança de Firmware no Kabum Smart 900 (LDRobot LR852K): Extração via SPI NAND e Descoberta de Vulnerabilidades"
+title: "Análise de Segurança de Firmware no Kabum Smart 900 (LDRobot LR852K)"
 date: 2026-08-17 12:00:00 -0300
 tags: [firmware, iot, reverse-engineering, spi-nand, tuya]
 read_min: 66
