@@ -1,0 +1,66 @@
+# ── t1m3 // gatonet.club ──────────────────────────────────────────────
+title: "t1m3"
+tagline: "hardware hacking / firmware / reverse engineering"
+description: >-
+  Notas de campo sobre hardware hacking, extração e análise de firmware,
+  e engenharia reversa de binários nativos e Android.
+author: "t1m3"
+lang: pt-BR
+
+# Site servido no subdomínio custom. Como é apex/sub com domínio próprio,
+# o baseurl fica vazio e a url é o domínio final.
+url: "https://t1m3.gatonet.club"
+baseurl: ""
+
+# ── Build ─────────────────────────────────────────────────────────────
+markdown: kramdown
+highlighter: rouge
+kramdown:
+  input: GFM
+  hard_wrap: false
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    css_class: "highlight"
+  smart_quotes: ["apos", "apos", "quot", "quot"]
+
+# Posts vivem sob /papers/<slug>/
+permalink: /papers/:slug/
+
+# Corpo dos posts é envolvido em {% raw %} (código com {{ }} e {% %}).
+# Desabilita extração de excerpt pra não renderizar um fragmento com raw
+# desbalanceado. seo-tag/feed caem na description do site.
+excerpt_separator: ""
+
+# ── Plugins (só os permitidos pelo GitHub Pages nativo) ───────────────
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+
+feed:
+  path: /feed.xml
+
+# jekyll-seo-tag
+social:
+  name: "t1m3"
+  links: []
+
+# ── Coleções / defaults ───────────────────────────────────────────────
+defaults:
+  - scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: "post"
+
+# ── Exclusões ─────────────────────────────────────────────────────────
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - README.md
+  - vendor
+  - .jekyll-cache
+  - .sass-cache
+  - scripts
+
+# Timezone dos posts
+timezone: America/Sao_Paulo

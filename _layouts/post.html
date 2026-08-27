@@ -1,0 +1,33 @@
+---
+layout: default
+---
+{%- if page.read_min -%}
+  {%- assign rt = page.read_min -%}
+{%- else -%}
+  {%- assign words = content | number_of_words -%}
+  {%- assign rt = words | divided_by: 200 | plus: 1 -%}
+{%- endif -%}
+<article class="post">
+  <div class="post-nav">
+    <a href="{{ '/papers/' | relative_url }}">&larr; ../papers</a>
+  </div>
+
+  <header class="post-header">
+    <h1>{{ page.title }}</h1>
+    <div class="post-meta">
+      <time datetime="{{ page.date | date_to_xmlschema }}">{{ page.date | date: "%Y-%m-%d" }}</time>
+      <span class="sep">·</span>~{{ rt }} min de leitura
+      {%- if page.tags and page.tags.size > 0 %}
+      <span class="sep">·</span><span class="post-tags">
+        {%- for t in page.tags -%}
+        #{{ t }}{% unless forloop.last %} {% endunless %}
+        {%- endfor -%}
+      </span>
+      {%- endif %}
+    </div>
+  </header>
+
+  <div class="post-content">
+    {{ content }}
+  </div>
+</article>

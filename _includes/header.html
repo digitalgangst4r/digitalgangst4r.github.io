@@ -1,0 +1,15 @@
+{%- assign u = page.url -%}
+<header class="site-header">
+  <div class="wrap">
+    <div class="brand">
+      <a href="{{ '/' | relative_url }}">t1m3<span class="tld">.gatonet.club</span></a>
+    </div>
+    <nav class="mainnav" aria-label="principal">
+      <span class="prompt">$</span>
+      <a href="{{ '/' | relative_url }}"{% if u == '/' %} aria-current="page"{% endif %}><span class="b">[</span> home <span class="b">]</span></a>
+      <a href="{{ '/papers/' | relative_url }}"{% if u contains '/papers' %} aria-current="page"{% endif %}><span class="b">[</span> papers <span class="b">]</span></a>
+      <a href="{{ '/pgp/' | relative_url }}"{% if u contains '/pgp' %} aria-current="page"{% endif %}><span class="b">[</span> pgp <span class="b">]</span></a>
+      <a href="{{ '/about/' | relative_url }}"{% if u contains '/about' %} aria-current="page"{% endif %}><span class="b">[</span> about <span class="b">]</span></a>
+    </nav>
+  </div>
+</header>

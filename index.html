@@ -1,0 +1,42 @@
+---
+layout: default
+title: t1m3 — hardware hacking notes
+---
+<section class="home">
+  <div class="banner" aria-hidden="true"><pre> _     _               _____
+| |_  / |  _ __ ___   |___ /
+| __| | | | '_ ` _ \    |_ \
+| |_  | | | | | | | |  ___) |
+ \__| |_| |_| |_| |_| |____/ <span class="cursor"></span></pre></div>
+  <p class="banner-sub">hardware hacking · firmware · engenharia reversa &nbsp;//&nbsp; gatonet.club</p>
+
+  <p class="intro">
+    Notas de campo. Extração de firmware na bancada, disassembly de binário
+    nativo, bytecode Dalvik, e o caminho de artefato fechado até PoC. Alvo real,
+    sanitizado quando precisa. Sem tutorial de remédia, sem hype.
+  </p>
+
+  <div class="section-label">papers</div>
+  <ol class="paperlist">
+    {%- for post in site.posts -%}
+    {%- assign rt = post.read_min | default: 8 -%}
+    <li>
+      <div class="paper">
+        <div class="idx">{{ forloop.index | prepend: '0' | slice: -2, 2 }}</div>
+        <div class="title">
+          <a class="title-link" href="{{ post.url | relative_url }}">{{ post.title }}</a>
+        </div>
+        <div class="meta">
+          <time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%Y-%m-%d" }}</time>
+          <span class="sep">·</span>~{{ rt }} min
+          {%- if post.tags and post.tags.size > 0 %}
+          <span class="sep">·</span><span class="tags">
+            {%- for t in post.tags limit: 3 -%}#{{ t }}{% unless forloop.last %} {% endunless %}{%- endfor -%}
+          </span>
+          {%- endif %}
+        </div>
+      </div>
+    </li>
+    {%- endfor -%}
+  </ol>
+</section>

@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="{{ site.lang | default: 'pt-BR' }}">
+<head>
+  {%- include head.html -%}
+</head>
+<body>
+  <div class="site">
+    {%- include header.html -%}
+    <main>
+      <div class="wrap">
+        {{ content }}
+      </div>
+    </main>
+    {%- include footer.html -%}
+  </div>
+</body>
+</html>
