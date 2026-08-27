@@ -129,6 +129,9 @@ nav.mainnav a:hover .b { color: var(--accent-dim); }
   text-shadow: 0 0 6px rgba(51,255,51,.25);   /* glow discreto, só no banner */
 }
 .banner pre { margin: 0; }
+/* Logo ANSI colorido (home): container com scroll no mobile, moldura sutil */
+.logo-banner { margin: .25rem 0 .6rem; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.logo-banner pre { border: 1px solid var(--border-hi); border-radius: 4px; max-width: none; }
 .banner-sub {
   font-family: var(--mono); color: var(--fg-dim); font-size: .82rem;
   letter-spacing: .02em; margin: .35rem 0 0;
