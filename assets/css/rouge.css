@@ -1,52 +1,45 @@
 ---
 ---
 /* ═══════════════════════════════════════════════════════════════════════
-   Rouge — paleta "teardown terminal" (quente + teal sobre #0F1417).
-   Código sempre escuro, nos dois temas. Casa com .term do design system.
+   Rouge — "amber terminal". Âmbar (keyword), moss (string), ferrugem
+   (número/const) sobre #12100c. Código sempre escuro, nos dois temas.
    ═══════════════════════════════════════════════════════════════════════ */
-.highlight, .highlight pre{ color:#D7DDE1; background:transparent }
-.highlight .err{ color:#E9836F }
-.highlight .lineno{ color:#3f4a50; padding-right:1rem; user-select:none }
+.highlight, .highlight pre{ color:#e6ddc9; background:transparent }
+.highlight .err{ color:#f08a63 }
+.highlight .lineno{ color:#4b4432; padding-right:1rem; user-select:none }
 
-/* comentários — teal apagado */
-.highlight .c,.highlight .cd,.highlight .cm,.highlight .c1,.highlight .cs{ color:#5f8177; font-style:italic }
-.highlight .cp{ color:#7c8a86 }
+.highlight .c,.highlight .cd,.highlight .cm,.highlight .c1,.highlight .cs{ color:#6f6a4e; font-style:italic }
+.highlight .cp{ color:#8a7f68 }
 
-/* keywords — laranja quente */
-.highlight .k,.highlight .kd,.highlight .kn,.highlight .kp,.highlight .kr,.highlight .kv,.highlight .kc{ color:#E0965C }
-.highlight .kt{ color:#7FC0AE }
+.highlight .k,.highlight .kd,.highlight .kn,.highlight .kp,.highlight .kr,.highlight .kv,.highlight .kc{ color:#e0a13a }
+.highlight .kt{ color:#9bb06a }
 
-/* strings — verde suave */
-.highlight .s,.highlight .sb,.highlight .sc,.highlight .sd,.highlight .s2,.highlight .sh,.highlight .sx,.highlight .s1,.highlight .ss,.highlight .dl,.highlight .sa{ color:#9AC79E }
-.highlight .se{ color:#E8B892 }
-.highlight .si,.highlight .sr{ color:#8FC7B4 }
+.highlight .s,.highlight .sb,.highlight .sc,.highlight .sd,.highlight .s2,.highlight .sh,.highlight .sx,.highlight .s1,.highlight .ss,.highlight .dl,.highlight .sa{ color:#9bb06a }
+.highlight .se{ color:#e0805a }
+.highlight .si,.highlight .sr{ color:#b3bd7c }
 
-/* números / constantes — laranja claro */
-.highlight .m,.highlight .mi,.highlight .mf,.highlight .mh,.highlight .mo,.highlight .mb,.highlight .mx,.highlight .il,.highlight .no{ color:#E8B892 }
+.highlight .m,.highlight .mi,.highlight .mf,.highlight .mh,.highlight .mo,.highlight .mb,.highlight .mx,.highlight .il,.highlight .no{ color:#e0805a }
 
-/* nomes */
-.highlight .n{ color:#D7DDE1 }
-.highlight .na{ color:#7FC0AE }
-.highlight .nb,.highlight .bp{ color:#6FB6A0 }
-.highlight .nc{ color:#E0965C; font-weight:600 }
-.highlight .nd{ color:#7FC0AE }
-.highlight .nf,.highlight .fm{ color:#E9C79A }
-.highlight .nn{ color:#7FC0AE }
-.highlight .nt{ color:#E0965C }
-.highlight .nv,.highlight .vc,.highlight .vg,.highlight .vi{ color:#D7DDE1 }
-.highlight .nx{ color:#E9C79A }
-.highlight .nl,.highlight .ne{ color:#E0965C }
+.highlight .n{ color:#e6ddc9 }
+.highlight .na{ color:#c9a86a }
+.highlight .nb,.highlight .bp{ color:#cbb27a }
+.highlight .nc{ color:#e0a13a; font-weight:600 }
+.highlight .nd{ color:#9bb06a }
+.highlight .nf,.highlight .fm{ color:#f0e4cb }
+.highlight .nn{ color:#c9a86a }
+.highlight .nt{ color:#e0a13a }
+.highlight .nv,.highlight .vc,.highlight .vg,.highlight .vi{ color:#e6ddc9 }
+.highlight .nx{ color:#f0e4cb }
+.highlight .nl,.highlight .ne{ color:#e0a13a }
 
-/* operadores / pontuação */
-.highlight .o,.highlight .ow{ color:#B79E8A }
-.highlight .p,.highlight .pi{ color:#79848C }
+.highlight .o,.highlight .ow{ color:#c79a6a }
+.highlight .p,.highlight .pi{ color:#8a7f68 }
 
-/* diff / genéricos */
-.highlight .gd{ color:#E9836F; background:rgba(233,131,111,.08) }
-.highlight .gi{ color:#9AC79E; background:rgba(154,199,158,.08) }
-.highlight .gh{ color:#7FC0AE; font-weight:600 }
-.highlight .gu{ color:#7FC0AE }
-.highlight .gp{ color:#63A794 }
+.highlight .gd{ color:#f08a63; background:rgba(240,138,99,.08) }
+.highlight .gi{ color:#9bb06a; background:rgba(155,176,106,.08) }
+.highlight .gh{ color:#e0a13a; font-weight:600 }
+.highlight .gu{ color:#c9a86a }
+.highlight .gp{ color:#9bb06a }
 .highlight .ge{ font-style:italic } .highlight .gs{ font-weight:700 }
-.highlight .gt{ color:#E9836F }
-.highlight .w{ color:#2a3138 }
+.highlight .gt{ color:#f08a63 }
+.highlight .w{ color:#2a2519 }
