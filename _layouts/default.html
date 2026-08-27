@@ -7,11 +7,40 @@
   <div class="site">
     {%- include header.html -%}
     <main>
-      <div class="wrap">
-        {{ content }}
-      </div>
+      {{ content }}
     </main>
     {%- include footer.html -%}
   </div>
+
+  <script>
+  (function(){
+    var root=document.documentElement, KEY='t1m3-theme';
+    var btn=document.getElementById('themeToggle'),
+        icon=document.getElementById('themeIcon'),
+        label=document.getElementById('themeLabel');
+    var order=['auto','light','dark'];
+    var meta={auto:{i:'◑',t:'auto'},light:{i:'☀',t:'light'},dark:{i:'☾',t:'dark'}};
+    function current(){try{var v=localStorage.getItem(KEY);return (v==='light'||v==='dark')?v:'auto';}catch(e){return 'auto';}}
+    function paint(v){ if(icon)icon.textContent=meta[v].i; if(label)label.textContent=meta[v].t; }
+    function apply(v){
+      if(v==='light'||v==='dark'){root.setAttribute('data-theme',v);} else {root.removeAttribute('data-theme');}
+      try{ if(v==='auto'){localStorage.removeItem(KEY);} else {localStorage.setItem(KEY,v);} }catch(e){}
+      paint(v);
+    }
+    paint(current());
+    if(btn){ btn.addEventListener('click',function(){
+      var v=current(), n=order[(order.indexOf(v)+1)%order.length]; apply(n);
+    }); }
+  })();
+  </script>
+
+  <script>
+  (function(){
+    var els=document.querySelectorAll('.reveal'); if(!els.length) return;
+    if(!('IntersectionObserver' in window)){ els.forEach(function(e){e.classList.add('in');}); return; }
+    var io=new IntersectionObserver(function(en){en.forEach(function(x){ if(x.isIntersecting){x.target.classList.add('in'); io.unobserve(x.target);} });},{rootMargin:'0px 0px -8% 0px'});
+    els.forEach(function(e){io.observe(e);});
+  })();
+  </script>
 </body>
 </html>

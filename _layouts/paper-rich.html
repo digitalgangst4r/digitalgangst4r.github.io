@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#E7EAEC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#13171A" media="(prefers-color-scheme: dark)">
+{%- comment -%} tema salvo pelo próprio script do paper (chave ft101-theme) {%- endcomment -%}
+<script>(function(){try{var t=localStorage.getItem('ft101-theme');if(t==='dark'||t==='light'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();</script>
+{%- seo -%}
+{%- feed_meta -%}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2313171A'/%3E%3Crect x='6' y='13' width='9' height='9' rx='2' fill='%23D98B53'/%3E%3Ctext x='17' y='22' font-family='monospace' font-size='11' fill='%234FB79D'%3Et1%3C/text%3E%3C/svg%3E">
+{%- include teardown-style.html -%}
+<style>
+  /* faixa de retorno ao blog (usa os tokens do design system do paper) */
+  .td-back{font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.02em;
+    padding:8px 22px; border-bottom:1px solid var(--line); background:var(--surface);
+    color:var(--ink-faint); display:flex; gap:8px; align-items:center;}
+  .td-back a{color:var(--ink-soft); border-bottom:1px solid transparent}
+  .td-back a:hover{color:var(--accent); border-bottom-color:currentColor}
+  .td-back .sep{opacity:.5}
+  .td-back .here{color:var(--accent)}
+</style>
+</head>
+<body>
+  <div class="td-back">
+    <a href="{{ '/' | relative_url }}">t1m3</a><span class="sep">/</span><a href="{{ '/papers/' | relative_url }}">papers</a><span class="sep">/</span><span class="here">firmware-teardown-101</span>
+  </div>
+  {{ content }}
+  {%- include teardown-scripts.html -%}
+</body>
+</html>

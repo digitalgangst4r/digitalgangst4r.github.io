@@ -1,0 +1,1101 @@
+---
+layout: paper-rich
+title: "Firmware Teardown 101"
+date: 2026-08-27 09:00:00 -0300
+tags: [firmware, hardware, reverse-engineering, field-manual]
+read_min: 71
+rich: true
+lang_note: "EN + PT (toggle no topo)"
+description: "Field manual de teardown de firmware: tirar os bytes do chip (UART, JTAG, SPI, eMMC, glitching, side-channel) e analisá-los (unpack, emulação, radare2, taint, secure boot)."
+---
+{% raw %}
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><defs>
+  <marker id="ar-acc" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" style="fill:var(--accent)"/></marker>
+  <marker id="ar-soft" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" style="fill:var(--ink-soft)"/></marker>
+  <marker id="ar-dan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" style="fill:var(--danger)"/></marker>
+</defs></svg>
+
+<div class="bar"><div class="bar-in">
+  <span class="brand"><span class="dot"></span>FIRMWARE&nbsp;TEARDOWN&nbsp;<span style="color:var(--accent)">101</span></span>
+  <span class="spacer"></span>
+  <button class="tgl" id="lz" aria-label="Switch language / Trocar idioma">PT</button>
+  <button class="tgl" id="tz" aria-label="Toggle color theme"><span id="tzi">◐</span> <span id="tzt">theme</span></button>
+</div></div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">hardware hacking field guide · <span class="kicker">beginner → intermediate</span></div>
+    <h1>Firmware Teardown 101<span class="sub x" data-i18n="t0001">hands on the hardware, then deep into the bytes</span></h1>
+    <p class="lede x" data-i18n="t0002"><b>Part I</b> is the bench. It's how you find the pins, solder to them, and pull a firmware image off a chip using a multimeter, a clip, UART, JTAG, eMMC, or when the silicon just won't cooperate, a glitch or a side channel. <b>Part II</b> is the fun part: you unpack that image, run it without the hardware, take it apart in radare2, and hunt the bugs that turn up on basically every vendor. It goes from your first continuity beep all the way to intermediate fault injection, and every spec and example here got fact checked against real sources.</p>
+    <div class="hexrule mono" aria-hidden="true">3V3&nbsp;·&nbsp;1V8&nbsp;·&nbsp;TCK&nbsp;TMS&nbsp;TDI&nbsp;TDO&nbsp;·&nbsp;<b>hsqs</b>&nbsp;·&nbsp;27 05 19 56&nbsp;·&nbsp;CS DO WP GND DI CLK HOLD VCC&nbsp;·&nbsp;<b>RDP1</b>&nbsp;·&nbsp;5D 00 00&nbsp;·&nbsp;VCCQ&nbsp;·&nbsp;CPA · SAD · EXTEST&nbsp;·&nbsp;<b>ANDROID!</b></div>
+    <div class="creed">
+      <span class="x" data-i18n="t0003">own the hardware, disclose responsibly</span>
+      <span class="x" data-i18n="t0004">measure the voltage before you connect</span>
+      <span class="x" data-i18n="t0005">read and verify before you ever write</span>
+      <span class="x" data-i18n="t0006">every claim cited, nothing made up</span>
+    </div>
+    <nav class="toc" aria-label="Contents">
+      <h2><span class="x" data-i18n="t0007">Contents</span> · <span class="mono" style="color:var(--accent)">17 topics</span></h2>
+      <div class="cols">
+        <div class="col">
+          <h3 class="x" data-i18n="t0008">Part I — Hardware: get the bytes off</h3>
+          <a href="#bench"><span class="n">01</span><span class="x" data-i18n="t0009">Bench, safety &amp; best practices</span></a>
+          <a href="#dmm"><span class="n">02</span><span class="x" data-i18n="t0010">Instruments: multimeter, LA &amp; scope</span></a>
+          <a href="#solder"><span class="n">03</span><span class="x" data-i18n="t0011">Soldering, rework &amp; chip-off</span></a>
+          <a href="#uart"><span class="n">04</span><span class="x" data-i18n="t0012">UART — the fastest way in</span></a>
+          <a href="#jtag"><span class="n">05</span><span class="x" data-i18n="t0013">JTAG, SWD &amp; boundary scan</span></a>
+          <a href="#spi"><span class="n">06</span><span class="x" data-i18n="t0014">SPI-NOR &amp; flashrom</span></a>
+          <a href="#emmc"><span class="n">07</span><span class="x" data-i18n="t0015">eMMC &amp; raw NAND</span></a>
+          <a href="#bus"><span class="n">08</span><span class="x" data-i18n="t0016">I2C, SPI sniffing &amp; EEPROMs</span><span class="nu">new</span></a>
+          <a href="#glitch"><span class="n">09</span><span class="x" data-i18n="t0017">Fault injection / glitching</span></a>
+          <a href="#sca"><span class="n">10</span><span class="x" data-i18n="t0018">Side-channel analysis</span><span class="nu">new</span></a>
+          <a href="#gear"><span class="n">11</span><span class="x" data-i18n="t0019">The gear ladder</span></a>
+          <a href="#case1"><span class="n">▸</span><span class="x" data-i18n="t0604">Running case: SOHO router, Part I</span></a>
+        </div>
+        <div class="col">
+          <h3 class="x" data-i18n="t0020">Part II — Firmware: analyze the bytes</h3>
+          <a href="#unpack"><span class="n">12</span><span class="x" data-i18n="t0021">Acquire, unpack &amp; the toolchain</span></a>
+          <a href="#emulate"><span class="n">13</span><span class="x" data-i18n="t0022">Emulation &amp; rehosting</span><span class="nu">new</span></a>
+          <a href="#analyze"><span class="n">14</span><span class="x" data-i18n="t0023">Analyze with radare2</span></a>
+          <a href="#boot"><span class="n">15</span><span class="x" data-i18n="t0024">Secure boot &amp; the boot chain</span><span class="nu">new</span></a>
+          <a href="#hunt"><span class="n">16</span><span class="x" data-i18n="t0025">Hunt — bug classes &amp; real CVEs</span></a>
+          <a href="#prove"><span class="n">17</span><span class="x" data-i18n="t0026">Prove, report &amp; methodology</span></a>
+          <a href="#case2"><span class="n">▸</span><span class="x" data-i18n="t0605">Running case: same router, Part II</span></a>
+        </div>
+      </div>
+    </nav>
+    <div class="callout tip fm" style="margin-top:22px"><div class="lab"><span class="fmtag">field manual</span> ◆ <span class="x" data-i18n="t0520">how to use this</span></div>
+      <p class="x" data-i18n="t0521">Sections <b>09-10</b> (glitching, side-channel) and <b>13/15</b> (rehosting, taint) are intermediate-plus, not day one. First board: run <b>01-06 + 12 + 14</b>, get a clean dump and one simple command-injection bug, then come back for the rest.</p>
+      <p class="x" data-i18n="t0522"><b>Out of scope:</b> this is wired firmware extraction and analysis. RF/SDR, Wi-Fi, and BLE are not covered, except pulling secrets out of the companion app.</p></div>
+  </header>
+</div>
+
+<div class="wrap" id="body">
+
+<nav class="symidx fm" aria-label="Symptom index">
+  <h2><span class="fmtag">field manual</span> <span class="x" data-i18n="t0523">Stuck? Jump to the fix</span></h2>
+  <p class="sub x" data-i18n="t0524">Find your symptom, click through to the "when it goes wrong" block in that section.</p>
+  <div class="cols">
+    <div class="col"><h3 class="x" data-i18n="t0525">Bench &amp; extraction</h3>
+      <a href="#spi"><span class="x" data-i18n="t0526">SPI read is all 0xFF, or changes every dump</span></a>
+      <a href="#spi"><span class="x" data-i18n="t0527">flashrom: "no flash device found"</span></a>
+      <a href="#spi"><span class="x" data-i18n="t0528">Detected, but erase/write fails or verifies the old value</span></a>
+      <a href="#spi"><span class="x" data-i18n="t0529">Is this chip 1.8V? (and why a CH341A can't read it)</span></a>
+      <a href="#uart"><span class="x" data-i18n="t0530">UART spits garbage</span></a>
+      <a href="#uart"><span class="x" data-i18n="t0531">UART is totally silent</span></a>
+      <a href="#uart"><span class="x" data-i18n="t0532">U-Boot won't stop at autoboot</span></a>
+      <a href="#uart"><span class="x" data-i18n="t0533">Root shell, but read-only rootfs / no tools</span></a>
+      <a href="#bench"><span class="x" data-i18n="t0534">Board browns out / current limit trips</span></a>
+      <a href="#emmc"><span class="x" data-i18n="t0535">eMMC won't enumerate in the SD reader</span></a>
+      <a href="#emmc"><span class="x" data-i18n="t0536">eMMC shows only one partition</span></a>
+      <a href="#emmc"><span class="x" data-i18n="t0537">Raw NAND dump is pure noise</span></a>
+      <a href="#jtag"><span class="x" data-i18n="t0538">Unlabeled JTAG pads</span></a>
+      <a href="#jtag"><span class="x" data-i18n="t0539">IDCODE reads, but memory is zero / faults</span></a>
+      <a href="#solder"><span class="x" data-i18n="t0540">Solder joint won't take / BGA warps on chip-off</span></a>
+      <a href="#dmm"><span class="x" data-i18n="t0600">Not sure a pad is UART</span></a>
+      <a href="#glitch"><span class="x" data-i18n="t0601">Glitching does nothing across thousands of tries</span></a>
+      <a href="#bus"><span class="x" data-i18n="t0603">EEPROM dump truncates or repeats</span></a>
+    </div>
+    <div class="col"><h3 class="x" data-i18n="t0541">Firmware &amp; analysis</h3>
+      <a href="#unpack"><span class="x" data-i18n="t0542">binwalk floods false positives / over-extracts</span></a>
+      <a href="#unpack"><span class="x" data-i18n="t0543">Entropy is flat ~1.0 across the whole image</span></a>
+      <a href="#analyze"><span class="x" data-i18n="t0544">radare2 disassembly is garbage</span></a>
+      <a href="#analyze"><span class="x" data-i18n="t0545">Can't find where a web parameter is handled</span></a>
+      <a href="#hunt"><span class="x" data-i18n="t0546">Found system()/popen() — is it a bug?</span></a>
+      <a href="#hunt"><span class="x" data-i18n="t0547">httpd writes NVRAM, another binary reads it</span></a>
+      <a href="#emulate"><span class="x" data-i18n="t0548">Router emulation won't boot</span></a>
+      <a href="#emulate"><span class="x" data-i18n="t0549">MCU firmware hangs forever in QEMU</span></a>
+      <a href="#prove"><span class="x" data-i18n="t0550">Did the vendor actually fix it?</span></a>
+      <a href="#prove"><span class="x" data-i18n="t0602">Stuck reversing a proprietary protocol</span></a>
+    </div>
+  </div>
+</nav>
+
+
+<section class="part reveal" id="part1">
+  <div class="pnum">PART I</div>
+  <h2 class="ph x" data-i18n="t0027">Hardware: getting the bytes off the chip</h2>
+  <p class="pdesc x" data-i18n="t0028">You can't analyze what you can't extract. This half is the physical craft: a safe bench, the two instruments you touch every session, and every realistic way onto the flash, from clipping an 8 pin chip to faulting a locked CPU into handing you its secrets.</p>
+</section>
+
+<!-- 01 bench -->
+<section class="topic reveal" id="bench">
+  <div class="thead"><span class="tno">01</span><h3 class="tt x" data-i18n="t0029">Bench, safety &amp; best practices</h3></div>
+  <p class="tlede x" data-i18n="t0030">Before you dump a single byte, set up a bench that won't kill your chips, brick your target, or hurt you. This stuff is boring right up until the moment it saves a board (or a finger), so get it in muscle memory early.</p>
+  <div class="chunks">
+    <div class="chunk"><h4 class="x" data-i18n="t0031">ESD is the zap you never feel<span class="lvl b">basics</span></h4><p class="x" data-i18n="t0032">Walking across carpet charges you to a few kilovolts. You won't feel a spark under about 3 kV, but the touchiest parts start dying below 250 V, so you can wound a flash chip and never know until it acts flaky weeks later. A cheap grounded mat plus a wrist strap keeps you and the board at the same potential so nothing ever discharges through the die. And the resistor in that strap is for ESD, not shock protection, so take the strap off before you go near anything mains powered.</p></div>
+    <div class="chunk"><h4 class="x" data-i18n="t0033">A current limited supply is your seatbelt<span class="lvl b">basics</span></h4><p class="x" data-i18n="t0034">A bench PSU lets you set a voltage and a max current. Dial the voltage to whatever the board's rail wants (measure it first) and set the current limit just above the expected draw. Now a solder bridge or a backwards chip just trips the limit instead of dumping unlimited amps into a dead short. If the supply slams to the limit and the voltage sags, that's a short, kill it and go find it.</p></div>
+    <div class="chunk"><h4 class="x" data-i18n="t0035">Back up before you write, always<span class="lvl i">habit</span></h4><p class="x" data-i18n="t0036">The number one way people brick a device is writing before reading. Dump the whole chip, read it twice, and confirm the two hashes match so you know the read itself was clean. That verified image is your undo button. If you can't get two matching reads, fix the clip before you touch the write path, because a corrupt "backup" is worse than none.</p></div>
+    <div class="chunk"><h4 class="x" data-i18n="t0037">Mains and lithium can hurt <i>you</i><span class="lvl i">safety</span></h4><p class="x" data-i18n="t0038">Lots of cheap gadgets use a non isolated supply where the low voltage "ground" is tied straight to the AC line, so clipping an earthed probe to it can make a lethal fault. The pro move is to just not probe the mains side: pull the firmware off the low voltage logic with the AC section unpowered. If you truly must probe it live, use a 1:1 isolation transformer (it removes the earth path, it does not lower the voltage, mains is still lethal). Lithium cells vent and burn if you puncture, short, or overcharge them, so disconnect the battery and run off your PSU.</p></div>
+  </div>
+  <div class="minis two">
+    <div class="mini spec"><div class="mh">◆ <span class="x" data-i18n="t0039">numbers worth knowing</span></div><ul>
+      <li class="kv x" data-i18n="t0040">ESD damage on the touchiest parts: <b>&lt;250 V</b>, way below what you can feel</li>
+      <li class="kv x" data-i18n="t0041">Common rails: <b>1.8 / 3.3 / 5 V</b> (also 1.2, 2.5). Measure, don't assume</li>
+      <li class="kv x" data-i18n="t0042">Li-ion cell: <b>3.7 V</b> nominal, <b>4.2 V</b> max charge, ~2.5-3.0 V floor</li>
+      <li class="kv x" data-i18n="t0043">Good backup = <b>2 reads, matching SHA-256</b>, before any write</li>
+    </ul></div>
+    <div class="mini watch"><div class="mh">▲ <span class="x" data-i18n="t0044">don't</span></div><ul>
+      <li class="x" data-i18n="t0045">Bond your bare wrist straight to earth, or leave the strap on near live mains.</li>
+      <li class="x" data-i18n="t0046">Trust a single flash read, or run the PSU with no current limit.</li>
+      <li class="x" data-i18n="t0047">Desolder before photographing the board and labeling every wire. That photo is what saves you at 1am.</li>
+    </ul></div>
+  </div>
+
+  <div class="tshoot fm">
+    <div class="tsh-h"><span class="fmtag">field manual</span> <span class="x" data-i18n="t0551">When it goes wrong</span></div>
+    <ul class="trios">
+    <li class="trio x" data-i18n="t0552"><b class="sy">Board browns out, or the PSU current limit trips the instant you probe.</b> <span class="cau"><b>Cause:</b> a short (solder bridge, backwards part), or you are probing a non-isolated mains supply.</span> <b>Play:</b> set the current limit low and raise it slowly, so a short trips CC mode instead of cooking a trace; if voltage collapses, cut power and find the short. <span class="warn">⚠ never probe the mains side of a non-isolated board, its "ground" can sit at line potential.</span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- 02 instruments -->
+<section class="topic reveal" id="dmm">
+  <div class="thead"><span class="tno">02</span><h3 class="tt x" data-i18n="t0048">Instruments: multimeter, logic analyzer &amp; scope</h3></div>
+  <p class="tlede x" data-i18n="t0049">You map a board with your hands before any iron or probe touches it. The multimeter finds ground and the rails, the logic analyzer decodes what's actually on a wire, and a scope shows you the analog truth when something's weird.</p>
+  <div class="chunks">
+    <div class="chunk"><h4 class="x" data-i18n="t0050">The multimeter, four modes and done<span class="lvl b">basics</span></h4><p class="x" data-i18n="t0051">Live in four settings: continuity (the beep) to find ground and trace nets, DC volts to read a rail against ground, and resistance and diode mode for parts (power off only, since they push their own current and a live rail gives garbage and can hurt the meter's input). Find ground first: continuity, black probe on obvious metal ground, and it beeps against any other ground. Then clip black there and let the red probe do all the walking.</p></div>
+    <div class="chunk"><h4 class="x" data-i18n="t0052">Spot the rails, then the candidate signals<span class="lvl b">basics</span></h4><p class="x" data-i18n="t0053">Power the board (USB or DC jack, never the mains side), DC volts, and sweep red across the header. A rail is a rock steady number (5V, 3.3V, or a 1.8V core). A UART <b>TX</b> pin idles at the logic voltage and then jitters for a second or two at power on while the banner prints, that boot time twitch is the reliable tell. A trick that saves headaches: read the idle TX voltage first, because that number <i>is</i> your logic level and it decides whether you need a level shifter.</p></div>
+    <div class="chunk"><h4 class="x" data-i18n="t0054">The logic analyzer turns guesses into decodes<span class="lvl i">level up</span></h4><p class="x" data-i18n="t0055">A $10 eight channel FX2 clone running <span class="mono">sigrok/PulseView</span> is the single best upgrade after the multimeter. Hook it to a mystery header at boot and the protocol decoders read UART, SPI, and I2C straight off the wire, so "is this UART or SPI?" stops being a guess. It also nails an unknown baud: capture TX, measure the narrowest pulse (that's one bit), and baud = 1/that. Sample at least four times faster than the signal you're chasing.</p></div>
+    <div class="chunk"><h4 class="x" data-i18n="t0056">In-circuit resistance lies to you<span class="lvl i">gotcha</span></h4><p class="x" data-i18n="t0057">Measure resistance on a soldered board and your part sits in parallel with every other path between those nodes, so a 10k pull up can read 300 ohms. Treat in-circuit resistance as "tied hard to a rail or not," never as a real value. For an actual value you'd lift one leg, but you rarely need to.</p></div>
+  </div>
+  <div class="minis two">
+    <div class="mini spec"><div class="mh">◆ <span class="x" data-i18n="t0058">quick specs</span></div><ul>
+      <li class="x" data-i18n="t0059">Black lead in <b>COM</b>, red in <b>VΩ</b>. Red left in the 10A jack while reading volts is a dead short.</li>
+      <li class="kv x" data-i18n="t0060">Bit-width to baud: <b>8.68 µs</b> ≈ 115200, 17.36 ≈ 57600, 104 ≈ 9600</li>
+      <li class="kv x" data-i18n="t0061">Sample rate: <b>≥ 4×</b> the fastest edge you want to see</li>
+    </ul></div>
+    <div class="mini watch"><div class="mh">▲ <span class="x" data-i18n="t0062">corrected</span></div><ul>
+      <li class="x" data-i18n="t0063"><b>Never</b> read resistance/continuity/diode on a powered board, those modes push their own current. Measure volts live, everything else dead.</li>
+      <li class="x" data-i18n="t0064"><b>RX often just floats</b>, so don't lean on it sitting near Vcc. Find TX (the pin that bursts at boot) first.</li>
+      <li class="x" data-i18n="t0065">Confirm the dial is on <b>DC volts</b>, not AC or a current range, before you touch a live rail.</li>
+    </ul></div>
+  </div>
+
+  <div class="tshoot fm">
+    <div class="tsh-h"><span class="fmtag">field manual</span> <span class="x" data-i18n="t0553">When it goes wrong</span></div>
+    <ul class="trios">
+    <li class="trio x" data-i18n="t0554"><b class="sy">Not sure a pad is UART.</b> <span class="cau"><b>Cause:</b> a multimeter shows idle levels, not traffic.</span> <b>Play:</b> put a logic analyzer on it and let sigrok decode: real UART turns into ASCII at some baud, and TX shows a dense burst at power-on. <span class="saver">⏱ confirms it before you solder anything</span></li>
+    <li class="trio x" data-i18n="t0555"><b class="sy">Resistance or continuity readings look nonsense on a live board.</b> <span class="cau"><b>Cause:</b> those modes push their own current, a powered rail corrupts them.</span> <b>Play:</b> measure volts live, everything else with the board off. In-circuit resistance is only a hint ("tied hard to a rail or not"), never a real value.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 03 soldering + chip-off -->
+<section class="topic reveal" id="solder">
+  <div class="thead"><span class="tno">03</span><h3 class="tt x" data-i18n="t0066">Soldering, rework &amp; chip-off</h3></div>
+  <p class="tlede x" data-i18n="t0067">Nobody tells beginners the real secret: soldering is mostly flux and heat control, not a steady hand. Get those two right and you'll be tacking wires to 0.5mm test points and lifting chips in a weekend.</p>
+  <div class="tgrid split">
+    <div class="chunks">
+      <div class="chunk"><h4 class="x" data-i18n="t0068">Flux is the whole game<span class="lvl b">basics</span></h4><p class="x" data-i18n="t0069">Solder only flows onto clean, hot metal, and flux strips the oxide so it wets. If a joint fights you, <b>add flux, don't crank the heat</b>. A no clean flux pen plus a syringe of tacky gel is the most underrated gear on the bench. Heat the joint (chisel tip, both pad and lead) and feed solder into the joint so its own heat melts it, not onto the tip.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0070">Read the joint, but know your alloy<span class="lvl i">judgment</span></h4><p class="x" data-i18n="t0071">A good joint is a smooth concave fillet that climbs the lead. On leaded (Sn63/Pb37) it's also shiny, but a perfect lead free (SAC305) joint looks matte and grainy, so judge by fillet <i>shape</i> and wetting, not shine. A dull ball sitting on top is cold (reheat it); solder spanning two pads is a bridge (wick it away).</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0072">Chip-off with hot air<span class="lvl i">level up</span></h4><p class="x" data-i18n="t0073">When a chip won't read in place, take it off. Flood it with flux, sweep the nozzle until <i>every</i> leg is molten, and the part lifts free. Tape neighbors with Kapton, and preheat big ground plane boards so you don't warp the PCB or crack BGA balls. This is your fallback for a noisy SPI chip and the main event for eMMC.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0074">In-circuit first, chip-off when it fights back<span class="lvl i">strategy</span></h4><p class="x" data-i18n="t0075">Always try reading a chip in place first, holding the SoC in reset so it doesn't fight you for the bus (more on that in the SPI and eMMC sections). Two identical back to back reads means you're done. Only reach for hot air when the board simply won't give you a clean, repeatable dump.</p></div>
+    </div>
+    <figure class="dg" data-id="incircuit-chipoff">
+      <svg viewBox="0 0 620 250" role="img" aria-label="In-circuit clip on a live board with SoC held in reset versus chip removed into a socket">
+        <text x="155" y="30" text-anchor="middle" class="lbl">in-circuit</text>
+        <rect x="40" y="44" width="230" height="150" rx="8" class="softbox" stroke-width="1.4"/>
+        <rect x="150" y="70" width="90" height="44" rx="4" class="chipfill soft" stroke-width="1.3"/><text x="195" y="96" text-anchor="middle" font-size="11">flash</text>
+        <rect x="70" y="130" width="90" height="44" rx="4" class="chipfill soft" stroke-width="1.3"/><text x="115" y="150" text-anchor="middle" font-size="11">SoC</text><text x="115" y="165" text-anchor="middle" font-size="10" class="danf">held in RESET</text>
+        <path d="M195 40 V 70" class="acc" stroke-width="2" marker-end="url(#ar-acc)"/><text x="195" y="36" text-anchor="middle" class="accf" font-size="11">clip / programmer</text>
+        <text x="252" y="188" text-anchor="end" class="lbl" font-size="10.5">SoC off the bus = no contention</text>
+        <text x="460" y="30" text-anchor="middle" class="lbl">chip-off</text>
+        <rect x="350" y="44" width="230" height="150" rx="8" class="softbox" stroke-width="1.4"/>
+        <rect x="380" y="70" width="90" height="44" rx="4" class="softbox" stroke-width="1.2" stroke-dasharray="4 3"/><text x="425" y="96" text-anchor="middle" font-size="10.5" class="lbl">(desoldered)</text>
+        <path d="M470 92 C 512 92, 500 140, 500 150" class="acc" fill="none" stroke-width="1.8" marker-end="url(#ar-acc)"/>
+        <rect x="470" y="150" width="80" height="34" rx="4" class="chipfill soft" stroke-width="1.3"/><text x="510" y="171" text-anchor="middle" font-size="11">socket</text>
+        <text x="565" y="60" text-anchor="end" class="lbl" font-size="10.5">read clean, resolder</text>
+      </svg>
+      <figcaption class="x" data-i18n="t0076">Read a chip in place with the SoC held in reset so it can't fight your programmer. Desolder only when shared lines or power still wreck the read.</figcaption>
+    </figure>
+  </div>
+  <div class="minis two">
+    <div class="mini spec"><div class="mh">◆ <span class="x" data-i18n="t0077">temperatures</span></div><ul>
+      <li class="kv x" data-i18n="t0078">Leaded Sn63/Pb37 melts <b>183 °C</b>, iron ~315-345 °C</li>
+      <li class="kv x" data-i18n="t0079">Lead-free SAC305 melts <b>~217 °C</b>, iron ~350-380 °C</li>
+      <li class="kv x" data-i18n="t0080">Hot-air removal: leaded ~300-350, lead-free ~350-400 °C (use the lowest that reflows)</li>
+    </ul></div>
+    <div class="mini watch"><div class="mh">▲ <span class="x" data-i18n="t0081">watch out</span></div><ul>
+      <li class="x" data-i18n="t0082"><b>Pull the lithium battery before hot air</b>, and ventilate: flux fumes and leaded solder are toxic, wash your hands.</li>
+      <li class="x" data-i18n="t0083">Don't run the iron cool "to be safe." Long contact does more damage than a hot tip touched briefly.</li>
+      <li class="x" data-i18n="t0084">Over-temp on a BGA cracks the die or lifts pads, and there's no undo.</li>
+    </ul></div>
+  </div>
+
+  <div class="tshoot fm">
+    <div class="tsh-h"><span class="fmtag">field manual</span> <span class="x" data-i18n="t0556">When it goes wrong</span></div>
+    <ul class="trios">
+    <li class="trio x" data-i18n="t0557"><b class="sy">Solder won't take, the joint fights you.</b> <span class="cau"><b>Cause:</b> not enough flux, or a tip with too little thermal mass.</span> <b>Play:</b> add flux (don't crank the temperature), use a chisel tip, heat both pad and lead, feed solder into the joint. On lead-free a good joint looks matte, so judge by fillet shape, not shine.</li>
+    <li class="trio x" data-i18n="t0558"><b class="sy">BGA warps or cracks during chip-off.</b> <span class="cau"><b>Cause:</b> a big ground plane sinks heat, so you overheat one spot.</span> <b>Play:</b> preheat the board, Kapton the neighbors, use the lowest air temp that actually reflows.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 04 UART -->
+<section class="topic reveal" id="uart">
+  <div class="thead"><span class="tno">04</span><h3 class="tt x" data-i18n="t0085">UART: the fastest way in</h3></div>
+  <p class="tlede x" data-i18n="t0086">A serial console is the single highest yield foothold in hardware hacking. Four pads that a lot of consumer gear leaves wide open, often dropping you straight to the boot log, the bootloader, or an unauthenticated root shell. The advanced work isn't finding the port, it's reading its level and baud off the wire and knowing what to do once you're in.</p>
+  <div class="tgrid split">
+    <div class="chunks">
+      <div class="chunk"><h4 class="x" data-i18n="t0087">Find the pads, then sniff safely<span class="lvl b">basics</span></h4><p class="x" data-i18n="t0088">Look for a row of 3-4 pads or an unpopulated header near the SoC. Multimeter finds GND (0Ω to ground) and the rails; TX is the one that idles high and jitters at boot. To just listen, wire only your adapter's RX to the target's TX plus a common ground and leave your TX disconnected, zero risk of injecting anything. To interact, cross them: adapter <b>TX to device RX</b>, RX to TX, share ground, and <b>never wire VCC</b>. Framing is almost always <b>8N1</b>.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0089">Match the level or fry a pin<span class="lvl i">safety</span></h4><p class="x" data-i18n="t0090">3.3V is most common, but plenty of modern SoCs run the console at <b>1.8V</b>, and 5V is rare. There's no telling by looking, so measure. A 3.3V adapter into a 1.8V input can wreck it, so drop in a level shifter (a BSS138 board is fine to ~1MHz, or use a Tigard that sets its own IO voltage). And never wire a real RS-232 port (±12V) to a TTL UART, that kills the chip instantly.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0091">Interrupt U-Boot and own the environment<span class="lvl i">the good part</span></h4><p class="x" data-i18n="t0092">During boot U-Boot prints "Hit any key to stop autoboot" and counts down. Spam a key and you drop to the <span class="mono">=&gt;</span> prompt. Now <span class="mono">printenv</span> dumps every variable (bootargs, bootcmd, server IPs, and frequently leaked WiFi keys), <span class="mono">setenv</span> edits in RAM, and you skip <span class="mono">saveenv</span> to keep changes volatile and reversible. There are also raw memory primitives (<span class="mono">md</span>, <span class="mono">mw</span>, <span class="mono">cp</span>) that can read secrets from RAM or even dump firmware.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0093">Force a shell with init=/bin/sh<span class="lvl i">the good part</span></h4><p class="x" data-i18n="t0094">Classic escalation: append <span class="mono">init=/bin/sh</span> to the kernel command line so the kernel execs a shell before any auth runs, dropping you to uid 0. Reuse the existing bootargs and just add the token, then <span class="mono">boot</span>. Expect a read only rootfs (<span class="mono">mount -o remount,rw /</span>), no networking or services, and a watchdog that may reboot you, so disable it. If the prompt is locked with <span class="mono">bootdelay=-2</span>, this is where you pivot to a flash-line glitch (see the glitching section).</p></div>
+    </div>
+    <figure class="dg" data-id="uart">
+      <svg viewBox="0 0 620 250" role="img" aria-label="UART: identify TX RX GND VCC on a header and cross adapter TX to device RX with common ground">
+        <rect x="40" y="60" width="150" height="130" rx="8" class="chipfill soft" stroke-width="1.5"/><text x="115" y="50" text-anchor="middle" class="lbl">device header</text>
+        <circle cx="70" cy="86" r="7" class="accf"/><text x="90" y="90" font-size="12" class="accf">TX  bursts on boot</text>
+        <circle cx="70" cy="116" r="7" class="fill"/><text x="90" y="120" font-size="12">RX  input (may float)</text>
+        <circle cx="70" cy="146" r="7" class="verf"/><text x="90" y="150" font-size="12" class="verf">VCC — do not wire</text>
+        <circle cx="70" cy="176" r="7" class="danf"/><text x="90" y="180" font-size="12" class="danf">GND 0V</text>
+        <rect x="430" y="60" width="150" height="130" rx="8" class="chipfill soft" stroke-width="1.5"/><text x="505" y="50" text-anchor="middle" class="lbl">USB-UART 3V3</text>
+        <circle cx="550" cy="86" r="7" class="fill"/><text x="535" y="90" font-size="12" text-anchor="end">RX</text>
+        <circle cx="550" cy="116" r="7" class="accf"/><text x="535" y="120" font-size="12" text-anchor="end">TX</text>
+        <circle cx="550" cy="176" r="7" class="danf"/><text x="535" y="180" font-size="12" text-anchor="end">GND</text>
+        <path d="M77 86 C 300 86, 320 116, 543 116" class="acc" fill="none" stroke-width="1.8" marker-end="url(#ar-acc)"/>
+        <path d="M77 116 C 300 116, 320 86, 543 86" class="soft" fill="none" stroke-width="1.8" marker-end="url(#ar-soft)"/>
+        <path d="M77 176 H 543" class="dan" fill="none" stroke-width="1.6"/>
+        <text x="310" y="76" text-anchor="middle" class="accf" font-size="11">TX → RX</text>
+        <text x="310" y="150" text-anchor="middle" class="lbl" font-size="11">RX ← TX</text>
+        <text x="310" y="196" text-anchor="middle" class="danf" font-size="11">common GND</text>
+      </svg>
+      <figcaption class="x" data-i18n="t0095">GND reads 0Ω to ground, TX flickers at power on. Match the level, cross TX and RX, share ground, and leave adapter TX off if you only want to listen.</figcaption>
+    </figure>
+  </div>
+  <div class="term">
+    <div class="term-top"><span class="led a"></span><span class="led"></span><span class="led"></span><span class="ttl">open the console, sweep the baud</span><button class="copy">copy</button></div>
+<pre><code>ls /dev/ttyUSB* /dev/ttyACM*          <span class="c"># which device did the adapter become?</span>
+picocom -b 115200 /dev/ttyUSB0        <span class="c"># exit: Ctrl-A Ctrl-X</span>
+<span class="c"># garbage? sweep bauds with a plain reader (stty + cat), not picocom in a loop:</span>
+for b in 115200 57600 38400 19200 9600 74880; do
+  echo "== $b =="; stty -F /dev/ttyUSB0 $b raw -echo; timeout 3 cat /dev/ttyUSB0
+done
+<span class="c"># in U-Boot: dump the env, force a shell, keep it volatile (no saveenv)</span>
+=&gt; printenv
+=&gt; setenv bootargs "${bootargs} init=/bin/sh" ; boot</code></pre>
+  </div>
+  <div class="exs two">
+    <div class="ex"><span class="exn x" data-i18n="t0096">Calix GigaCenter ONT: unauth root over UART</span><p class="x" data-i18n="t0097">Several Broadcom based ONT models expose an unprotected 115200 console that drops straight to a root shell, no auth at all.</p><span class="ref">CVE-2025-53914 · Fluid Attacks "sheivi"</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0098">Glitching U-Boot by shorting the NAND</span><p class="x" data-i18n="t0099">Brad Dixon forced a recovery shell on a locked bootloader by briefly grounding a NAND data line at a log triggered moment, beating <span class="mono">bootdelay=-2</span>. Note: the lever is the flash line, not TX. Grounding TX blindly can be destructive (on Airoha EN7523 it's a bootstrap pin and corrupts SPI-NAND).</p><span class="ref">Trellix / Carve Systems</span></div>
+  </div>
+  <div class="refs"><div class="rh">go deeper</div><ul>
+    <li><a href="https://riverloopsecurity.com/blog/2020/01/hw-101-uart/">River Loop, Root shell via UART</a></li>
+    <li><a href="https://www.synacktiv.com/en/publications/i-hack-u-boot">Synacktiv, I hack, U-Boot</a></li>
+    <li><a href="https://voidstarsec.com/roadmap/">VoidStar (wrongbaud) roadmap</a></li>
+    <li><a href="https://hacktricks.wiki/en/hardware-physical-access/firmware-analysis/bootloader-testing.html">HackTricks, bootloader testing</a></li>
+  </ul></div>
+
+  <div class="tshoot fm">
+    <div class="tsh-h"><span class="fmtag">field manual</span> <span class="x" data-i18n="t0559">When it goes wrong</span></div>
+    <ul class="trios">
+    <li class="trio x" data-i18n="t0560"><b class="sy">UART spits garbage.</b> <span class="cau"><b>Cause:</b> wrong baud, wrong logic level, inverted signal, or it isn't UART.</span> <b>Play:</b> sweep the standard bauds (<span class="mono">115200 57600 38400 19200 9600 74880</span>); if a level looks off, measure TX at idle; if nothing decodes, confirm it's really UART with a logic analyzer + sigrok.</li>
+    <li class="trio x" data-i18n="t0561"><b class="sy">UART is totally silent.</b> <span class="cau"><b>Cause:</b> you are on RX (it floats), TX/RX are swapped, or the console is disabled in bootargs.</span> <b>Play:</b> find the pad that bursts at power-on, that's TX; swap TX/RX; read the boot log's <span class="mono">console=</span> to see the intended port. <span class="warn">⚠ a TX-only console lets you read but not type, don't assume it's "locked".</span></li>
+    <li class="trio x" data-i18n="t0562"><b class="sy">U-Boot won't stop at autoboot.</b> <span class="cau"><b>Cause:</b> <span class="mono">bootdelay</span> is 0/-1/-2, or you're mashing keys too late.</span> <b>Play:</b> spam a key from the instant of power-on. If it's genuinely locked (<span class="mono">bootdelay=-2</span>), pivot to glitching the <b>flash data line</b> to force a recovery fallback, not the UART TX line.</li>
+    <li class="trio x" data-i18n="t0563"><b class="sy">Root shell, but the rootfs is read-only with no tools.</b> <span class="cau"><b>Cause:</b> SquashFS is read-only, and <span class="mono">init=/bin/sh</span> brought up no services.</span> <b>Play:</b> <span class="mono">mount -o remount,rw /</span>, use BusyBox applets, and exfil over the same console (tar+base64) or via <span class="mono">tftp</span>/<span class="mono">nc</span> if the network is up. <span class="warn">⚠ disable the watchdog first, or it reboots you mid-work.</span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- 05 JTAG/SWD/boundary scan -->
+<section class="topic reveal" id="jtag">
+  <div class="thead"><span class="tno">05</span><h3 class="tt x" data-i18n="t0100">JTAG, SWD &amp; boundary scan</h3></div>
+  <p class="tlede x" data-i18n="t0101">JTAG and its two wire ARM cousin SWD are the debug backbone of almost every board. If the vendor left them live you get to halt the CPU, read memory, and dump flash with zero desoldering. This goes past "find four pins and run OpenOCD" into boundary scan tricks and what to do when the port is fused off.</p>
+  <div class="tgrid split">
+    <div class="chunks">
+      <div class="chunk"><h4 class="x" data-i18n="t0102">The signals, and SWD reusing them<span class="lvl b">basics</span></h4><p class="x" data-i18n="t0103">JTAG has four mandatory wires: <b>TCK</b> (clock), <b>TMS</b> (state), <b>TDI</b> (in), <b>TDO</b> (out), plus optional resets. SWD collapses it to <b>SWDIO</b> + <b>SWCLK</b> on ARM Cortex, and it literally reuses the JTAG header pins (SWDIO on TMS, SWCLK on TCK). If only two debug lines respond, assume SWD. Heads up though, plenty of application SoCs route only JTAG, so don't count on SWD being there.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0104">Find an unlabeled port<span class="lvl i">recon</span></h4><p class="x" data-i18n="t0105">On a stripped board the debug pads are unmarked. <b>JTAGenum</b> (firmware for an Arduino/Pico) permutes a bunch of GPIOs watching for a valid IDCODE; Joe Grand's <b>JTAGulator</b> is purpose built hardware with 24 protected channels and adjustable target voltage (1.2 to 3.3V) that runs IDCODE and BYPASS scans. Both drive unknown pins through every permutation, so treat results as candidates and tie grounds together first.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0106">Boundary scan: read a flash through the CPU's pins<span class="lvl i">deep</span></h4><p class="x" data-i18n="t0107">Every compliant pin has a scan cell between the pad and the core. <b>SAMPLE</b> snapshots pin states (safe); <b>EXTEST</b> disconnects the core and drives the pins straight from that register. With the chip's BSDL file you know which register bit maps to which ball, so you can bit-bang the CPU's own GPIOs that wire to an external SPI/NAND flash and clock the flash out with no firmware running. It's painfully slow but it works when you can't desolder, and boundary scan often survives "debug disable" fuses because it's a separate test feature.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0108">gdb over the DAP, and when it's fused<span class="lvl i">deep</span></h4><p class="x" data-i18n="t0109">OpenOCD speaks CoreSight and gives you a gdb server on 3333, telnet on 4444. Halt the core, <span class="mono">dump_image fw.bin 0x08000000 0x100000</span>, done. But if IDCODE reads fine while memory comes back all zeros or faults, the part is read protected: STM32 RDP, Nordic APPROTECT, eFuses. Bypasses are almost always fault injection, not software (see glitching). On MIPS routers you'll meet EJTAG instead, where PrAcc mode makes the CPU service memory accesses for you, which is how bricked WRT54G style routers get de-bricked.</p></div><div class="chunk"><h4 class="x" data-i18n="t0613">EJTAG and PrAcc, for real<span class="lvl i">MIPS</span></h4><p class="x" data-i18n="t0614">On MIPS routers the debug port isn't ARM's DAP, it's <b>EJTAG</b>, and the lever is <b>PrAcc</b> (processor access). Halt the core and it jumps into <span class="mono">dmseg</span>, the debug segment at <span class="mono">0xFF20_0000</span>, running from the debug exception vector at <span class="mono">0xFF20_0200</span>, where every fetch, load, and store becomes a transaction the probe services by hand. The handshake lives in the EJTAG control register: when <span class="mono">PrAcc</span>=1 the CPU is stalled waiting; you read the <b>Address</b> register to see what it wants, check <span class="mono">PRnW</span> for read vs write, put the value in the <b>Data</b> register, then clear <span class="mono">PrAcc</span> to let it run. That's how you spoon-feed a tiny flash-writer into a bricked WRT54G with no working bootloader; the classic HairyDairyMaid/TJTAG debrick utilities are exactly this loop, and OpenOCD drives it through a <span class="mono">mips_m4k</span> target.</p></div>
+    </div>
+    <figure class="dg" data-id="boundaryscan">
+      <svg viewBox="0 0 560 230" role="img" aria-label="Boundary scan: a shift-register cell sits between each pin and the core, JTAG shifts values through the ring to observe and control every pin">
+        <rect x="150" y="55" width="260" height="120" rx="10" class="chipfill soft" stroke-width="1.4"/><text x="280" y="118" text-anchor="middle" font-size="12" class="lbl">core logic</text>
+        <rect x="120" y="70" width="26" height="16" class="accwash soft"/><rect x="120" y="100" width="26" height="16" class="accwash soft"/><rect x="120" y="130" width="26" height="16" class="accwash soft"/>
+        <rect x="414" y="70" width="26" height="16" class="accwash soft"/><rect x="414" y="100" width="26" height="16" class="accwash soft"/><rect x="414" y="130" width="26" height="16" class="accwash soft"/>
+        <text x="133" y="52" text-anchor="middle" class="accf" font-size="10">BSR cells</text>
+        <g class="soft" stroke-width="1.3"><line x1="90" y1="78" x2="120" y2="78"/><line x1="90" y1="108" x2="120" y2="108"/><line x1="90" y1="138" x2="120" y2="138"/><line x1="440" y1="78" x2="470" y2="78"/><line x1="440" y1="108" x2="470" y2="108"/><line x1="440" y1="138" x2="470" y2="138"/></g>
+        <text x="78" y="112" text-anchor="end" class="lbl" font-size="10">pins</text>
+        <path d="M133 146 C 133 200, 427 200, 427 146" class="acc" fill="none" stroke-width="1.6" marker-end="url(#ar-acc)"/>
+        <text x="280" y="212" text-anchor="middle" class="accf" font-size="10.5">TDI → … cells … → TDO  (shift the ring)</text>
+        <text x="280" y="40" text-anchor="middle" class="lbl" font-size="10.5">SAMPLE = observe pins · EXTEST = drive pins</text>
+      </svg>
+      <figcaption class="x" data-i18n="t0110">JTAG puts a shift register cell between every pin and the core. Shift the ring and you can read (SAMPLE) or drive (EXTEST) each pin, even bit-bang an external flash through the CPU's own legs.</figcaption>
+    </figure>
+  </div>
+  
+  <div class="term">
+    <div class="term-top"><span class="led a"></span><span class="led"></span><span class="led"></span><span class="ttl">openocd: halt &amp; dump over SWD/JTAG</span><button class="copy">copy</button></div>
+<pre><code><span class="c"># adapter cfg + target cfg, both from OpenOCD's script tree</span>
+openocd -f interface/stlink.cfg -f target/stm32f4x.cfg
+<span class="c"># or a generic FT2232H probe (Tigard) with an inline adapter cfg:</span>
+openocd -c "adapter driver ftdi; ftdi vid_pid 0x0403 0x6010" \
+        -c "transport select swd" -f target/stm32f4x.cfg
+<span class="c"># then drive it on telnet 4444 (a gdb server is on 3333)</span>
+telnet localhost 4444
+&gt; reset halt                                  <span class="c"># stop the core</span>
+&gt; dump_image fw.bin 0x08000000 0x00100000     <span class="c"># base address + byte length</span>
+&gt; flash read_bank 0 bank0.bin                 <span class="c"># or read via the flash driver</span></code></pre>
+  </div>
+  <div class="term" style="margin-top:16px">
+    <div class="term-top"><span class="led a"></span><span class="led"></span><span class="led"></span><span class="ttl">urjtag: boundary-scan an external flash</span><button class="copy">copy</button></div>
+<pre><code>jtag
+jtag&gt; cable ft2232                          <span class="c"># select your probe (see: cable help)</span>
+jtag&gt; detect                               <span class="c"># prints each TAP's IDCODE</span>
+jtag&gt; bsdl path ./bsdl                      <span class="c"># point at your .bsdl directory</span>
+jtag&gt; part 0
+jtag&gt; instruction EXTEST                    <span class="c"># core disconnected, pins driven by the BSR</span>
+jtag&gt; shift ir
+<span class="c"># signal names below come from the SoC's BSDL, not made up:</span>
+jtag&gt; set signal FLASH_CS  out 1
+jtag&gt; set signal FLASH_CLK out 0
+jtag&gt; set signal FLASH_DI  out 0
+jtag&gt; shift dr                             <span class="c"># one DR shift clocks the pins once</span>
+jtag&gt; get signal FLASH_DO                  <span class="c"># sample the flash's output bit</span></code></pre>
+  </div>
+  <div class="exs two">
+    <div class="ex"><span class="exn x" data-i18n="t0111">STM32 RDP1 readout via glitch</span><p class="x" data-i18n="t0112">Obermaier &amp; Tellenbach showed RDP1 flash readout is defeatable; follow-up tools dump RDP1 protected STM32F1 with a $4 Pi Pico. One STM32F4 writeup pulled 256KB after 1,024 wins out of 621,594 attempts.</p><span class="ref">USENIX WOOT'17 · CTXz/stm32f1-picopwner</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0113">WRT54G de-brick over EJTAG</span><p class="x" data-i18n="t0114">HairyDairyMaid's Debrick Utility and TJTAG use bare EJTAG to erase and reflash bricked MIPS routers with no working bootloader, the classic proof that JTAG owns the board.</p><span class="ref">HairyDairyMaid v4.8 / TJTAG</span></div>
+  </div>
+  <div class="refs"><div class="rh">go deeper</div><ul>
+    <li><a href="https://www.usenix.org/system/files/conference/woot17/woot17-paper-obermaier.pdf">Obermaier &amp; Tellenbach, Shedding too much Light (STM32 RDP)</a></li>
+    <li><a href="https://openocd.org/doc/html/index.html">OpenOCD manual</a></li>
+    <li><a href="http://www.grandideastudio.com/jtagulator/">JTAGulator (Joe Grand)</a></li>
+    <li><a href="https://github.com/cyphunk/JTAGenum">JTAGenum</a></li>
+  </ul></div>
+
+  <div class="tshoot fm">
+    <div class="tsh-h"><span class="fmtag">field manual</span> <span class="x" data-i18n="t0564">When it goes wrong</span></div>
+    <ul class="trios">
+    <li class="trio x" data-i18n="t0565"><b class="sy">Unlabeled JTAG/SWD pads.</b> <span class="cau"><b>Cause:</b> no silkscreen, unknown pinout.</span> <b>Play:</b> brute the pinout with JTAGenum (a Pico/Arduino) or a JTAGulator, watching for a valid IDCODE. Tie all grounds together first, and treat every result as a candidate. <span class="warn">⚠ if only two lines respond, assume SWD, not JTAG.</span></li>
+    <li class="trio x" data-i18n="t0566"><b class="sy">IDCODE reads fine, but memory comes back zero or faults.</b> <span class="cau"><b>Cause:</b> readout protection (STM32 RDP, Nordic APPROTECT, eFuses).</span> <b>Play:</b> software won't solve this, pivot to fault injection to bypass the check, or read the flash chip off-board. On a MIPS router you'll meet EJTAG instead, where PrAcc mode services memory for you.</li>
+    </ul>
+  </div>
+  <div class="dtree fm"><div class="dh"><span class="fmtag">field manual</span> Decision: software bug or glitch?</div>
+  <div class="flow x" data-i18n="t0567">Debug port answers and memory reads back? &nbsp;→&nbsp; <span class="go">software</span>: dump, reverse, find the bug.<br>IDCODE reads but memory faults / returns zero &nbsp;→&nbsp; readout protection (RDP/APPROTECT), software won't help.<br>No usable debug and flash is on-package/encrypted &nbsp;→&nbsp; <span class="stop">fault injection</span>: glitch the check (section 09).</div></div>
+</section>
+
+<!-- 06 SPI-NOR -->
+<section class="topic reveal" id="spi">
+  <div class="thead"><span class="tno">06</span><h3 class="tt x" data-i18n="t0115">SPI-NOR &amp; flashrom</h3></div>
+  <p class="tlede x" data-i18n="t0116">SPI-NOR is where most small devices keep firmware, and it's the single easiest chip to dump. Find the little 8 pin flash near the SoC, clip on, and read the whole image in seconds. The intermediate stuff is winning the fight for the bus and not frying a 1.8V part.</p>
+  <div class="tgrid split">
+    <div class="chunks">
+      <div class="chunk"><h4 class="x" data-i18n="t0117">One pinout to rule them all<span class="lvl b">basics</span></h4><p class="x" data-i18n="t0118">Every 25-series 8 pin part (Winbond W25Q, Macronix MX25, GigaDevice GD25) shares the JEDEC layout in the diagram. Orient by the pin-1 dot, a clip flipped 180° swaps power and ground and kills the chip. On a plain single SPI hookup, tie <span class="mono">/WP</span> (pin 3) and <span class="mono">/HOLD</span> (pin 7) high or the chip stays held. And the digits are mega<b>bits</b>: W25Q128 is 16 MB, not 128.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0119">Win the bus: hold the SoC off it<span class="lvl i">the trick</span></h4><p class="x" data-i18n="t0120">In-circuit reads come back as garbage (all 0xFF, or different every time) because the SoC drives the same lines. Two fixes: pull the SoC's <span class="mono">/RST</span> to ground so its SPI pins tri-state, or lift the flash's VCC (pin 8) and power the chip only from your programmer. Start the SPI clock low (512 kHz to 8 MHz through a clip), 33 MHz is usually too fast on long wires.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0121">The 1.8V trap and the CH341A hazard<span class="lvl i">safety</span></h4><p class="x" data-i18n="t0122">Decode the suffix before you wire anything: Winbond <span class="mono">JV/FV</span> = 3.3V, <span class="mono">JW/FW</span> = 1.8V (roughly 1.7 to 1.95V); Macronix <span class="mono">MX25L</span> = 3.3V, <span class="mono">MX25U</span> = 1.8V. Hitting a 1.8V part with 3.3V destroys it. Separately, the common black CH341A drives its data lines at ~5V even at "3.3V", so use a properly modded board or a Tigard, and for a 1.8V part a CH341A is out entirely (no mod makes it 1.8V), you need a level-selectable tool.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0123">Write protection, if you ever write back<span class="lvl i">deep</span></h4><p class="x" data-i18n="t0124">Reads ignore write protection, but any erase or program silently fails until you clear it. It lives in the status registers (the BP/TB/SEC/CMP bits plus SRP0/SRP1). <span class="mono">flashrom --wp-status</span> shows it, <span class="mono">--wp-disable</span> clears it. The gotcha: if the hardware <span class="mono">/WP</span> pin is held low with SRP0 set, the register is frozen and software can't unlock it, so tie <span class="mono">/WP</span> high first. Some parts even ship with BP bits set by default.</p></div>
+    </div>
+    <figure class="dg" data-id="spi-pinout">
+      <svg viewBox="0 0 460 260" role="img" aria-label="SPI-NOR 8-pin SOIC pinout: 1 CS, 2 DO, 3 WP, 4 GND, 5 DI, 6 CLK, 7 HOLD, 8 VCC">
+        <rect x="150" y="40" width="160" height="180" rx="8" class="chipfill soft" stroke-width="1.5"/>
+        <path d="M150 118 a10 10 0 0 0 0 24" class="soft" fill="none" stroke-width="1.5"/><circle cx="172" cy="62" r="4.5" class="accf"/>
+        <text x="230" y="128" text-anchor="middle" class="lbl">25-series</text><text x="230" y="146" text-anchor="middle" class="lbl">SPI-NOR</text>
+        <rect x="120" y="52" width="30" height="12" class="padfill soft" stroke-width="1"/><text x="112" y="61" text-anchor="end">1</text><text x="60" y="61" class="accf">/CS</text>
+        <rect x="120" y="92" width="30" height="12" class="padfill soft" stroke-width="1"/><text x="112" y="101" text-anchor="end">2</text><text x="60" y="101">DO · MISO</text>
+        <rect x="120" y="132" width="30" height="12" class="padfill soft" stroke-width="1"/><text x="112" y="141" text-anchor="end">3</text><text x="60" y="141">/WP</text>
+        <rect x="120" y="172" width="30" height="12" class="padfill soft" stroke-width="1"/><text x="112" y="181" text-anchor="end">4</text><text x="60" y="181" class="danf">GND</text>
+        <rect x="310" y="52" width="30" height="12" class="padfill soft" stroke-width="1"/><text x="348" y="61">8</text><text x="400" y="61" text-anchor="end" class="danf">VCC 3V3</text>
+        <rect x="310" y="92" width="30" height="12" class="padfill soft" stroke-width="1"/><text x="348" y="101">7</text><text x="400" y="101" text-anchor="end">/HOLD</text>
+        <rect x="310" y="132" width="30" height="12" class="padfill soft" stroke-width="1"/><text x="348" y="141">6</text><text x="400" y="141" text-anchor="end" class="accf">CLK</text>
+        <rect x="310" y="172" width="30" height="12" class="padfill soft" stroke-width="1"/><text x="348" y="181">5</text><text x="400" y="181" text-anchor="end">DI · MOSI</text>
+        <text x="230" y="244" text-anchor="middle" class="lbl">top view · pin-1 dot</text>
+      </svg>
+      <figcaption class="x" data-i18n="t0125">The 8 pin SOIC layout on almost every router. A SOIC-8 clip lands each contact on the right signal once you orient the pin-1 dot.</figcaption>
+    </figure>
+  </div>
+  <div class="term">
+    <div class="term-top"><span class="led a"></span><span class="led"></span><span class="led"></span><span class="ttl">flashrom: detect, read, verify</span><button class="copy">copy</button></div>
+<pre><code>flashrom -p ch341a_spi                        <span class="c"># identify part + voltage FIRST (no -r/-w)</span>
+flashrom -p ch341a_spi -r dump1.bin
+flashrom -p ch341a_spi -r dump2.bin
+sha256sum dump1.bin dump2.bin &amp;&amp; cmp dump1.bin dump2.bin   <span class="c"># two reads must match</span>
+binwalk dump1.bin                             <span class="c"># sanity: U-Boot + kernel + SquashFS = clean read</span>
+<span class="c"># Raspberry Pi as SPI host, drop the clock if unstable:</span>
+flashrom -p linux_spi:dev=/dev/spidev0.0,spispeed=4000 -r dump.bin</code></pre>
+  </div>
+  <div class="exs two">
+    <div class="ex"><span class="exn x" data-i18n="t0126">Huawei HG533: power only the flash</span><p class="x" data-i18n="t0127">The widely cited jcjc-dev writeup fights a Ralink SoC for the SPI bus, powers the Spansion flash directly to keep the SoC quiet, and dumps it via flashrom on a Pi. The canonical in-circuit tutorial.</p><span class="ref">jcjc-dev, Practical RE Pt.4</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0128">Router teardown, chip-off fallback</span><p class="x" data-i18n="t0129">wrongbaud's classic: the in-circuit read failed because CS wasn't pulled low enough, so the chip came off with hot air and dumped over a Bus Pirate. binwalk then showed dual U-Boot, a kernel, and SquashFS.</p><span class="ref">wrongbaud / VoidStar</span></div>
+  </div>
+  <div class="refs"><div class="rh">go deeper</div><ul>
+    <li><a href="https://www.flashrom.org/classic_cli_manpage.html">flashrom CLI docs</a></li>
+    <li><a href="https://jcjc-dev.com/2016/06/08/reversing-huawei-4-dumping-flash/">jcjc-dev, Dumping the Flash</a></li>
+    <li><a href="https://wiki.cuvoodoo.info/doku.php?id=dump_spi_flash">CuVoodoo, dump_spi_flash</a></li>
+    <li><a href="https://github.com/tigard-tools/tigard">Tigard</a></li>
+  </ul></div>
+
+  <div class="tshoot fm">
+    <div class="tsh-h"><span class="fmtag">field manual</span> <span class="x" data-i18n="t0568">When it goes wrong</span></div>
+    <ul class="trios">
+    <li class="trio x" data-i18n="t0569"><b class="sy">SPI read is all 0xFF/0x00, or differs between dumps.</b> <span class="cau"><b>Cause:</b> the SoC still drives the bus / CS not low / chip unpowered / clip on backwards.</span> <b>Play:</b> tie the SoC <b>/RST</b> to GND to tri-state its pins <span class="saver">⏱ saves a desolder</span>; if not, lift the flash <b>VCC (pin 8)</b> and power it from the programmer only; drop the clock to <span class="mono">512kHz-4MHz</span> on long wires; re-seat the clip with flux. <span class="warn">⚠ a clip flipped 180° swaps VCC/GND and KILLS the chip, orient by the pin-1 dot BEFORE powering.</span></li>
+    <li class="trio x" data-i18n="t0570"><b class="sy">flashrom says "no flash device found".</b> <span class="cau"><b>Cause:</b> VCC/GND orientation, a CH341A driving ~5V on the data lines, or an unknown chip ID.</span> <b>Play:</b> re-check pin-1 orientation and voltage; if the JEDEC ID is ambiguous, force the exact part with <span class="mono">-c "&lt;chip&gt;"</span>. Confirm your programmer's real I/O voltage with a meter.</li>
+    <li class="trio x" data-i18n="t0571"><b class="sy">Detects the chip, but erase/write fails silently or verifies the old value.</b> <span class="cau"><b>Cause:</b> status-register write-protect (BP/SRP bits), or the hardware <span class="mono">/WP</span> pin held low.</span> <b>Play:</b> <span class="mono">flashrom --wp-status</span> to inspect, <span class="mono">--wp-disable</span> to clear; if SRP0 is set with <span class="mono">/WP</span> asserted, the register is frozen, so tie <span class="mono">/WP</span> high first.</li>
+    <li class="trio x" data-i18n="t0572"><b class="sy">Is this a 1.8V part? (find out before you power it).</b> <span class="cau"><b>Cause:</b> a 3.3V programmer on a 1.8V chip destroys it.</span> <b>Play:</b> decode the suffix (Winbond <span class="mono">JW/FW</span> = 1.8V vs <span class="mono">JV/FV</span> = 3.3V; Macronix <span class="mono">MX25U</span> = 1.8V vs <span class="mono">MX25L</span> = 3.3V) and check the datasheet. <span class="warn">⚠ no CH341A, modded or not, drives 1.8V; use a level-selectable tool.</span></li>
+    </ul>
+  </div>
+  <div class="dtree fm"><div class="dh"><span class="fmtag">field manual</span> Decision: in-circuit or chip-off?</div>
+  <div class="flow x" data-i18n="t0573">Clip on, read twice &nbsp;→&nbsp; <span class="go">two identical dumps?</span> &nbsp;→&nbsp; <b>done, in-circuit wins.</b><br>Garbage / differs &nbsp;→&nbsp; tie the SoC <b>/RST</b> to GND, retry.<br>Still garbage &nbsp;→&nbsp; lift flash <b>VCC (pin 8)</b>, power from the programmer only.<br>Still bad, or it's a 1.8V part your tool can't drive &nbsp;→&nbsp; <span class="stop">chip-off</span>: hot-air it into a socket.</div></div>
+</section>
+
+<!-- 07 eMMC / NAND -->
+<section class="topic reveal" id="emmc">
+  <div class="thead"><span class="tno">07</span><h3 class="tt x" data-i18n="t0130">eMMC &amp; raw NAND</h3></div>
+  <p class="tlede x" data-i18n="t0131">When a device is too big for an 8 pin SPI chip (phones, tablets, routers, cameras), firmware lives in eMMC or raw NAND. eMMC is the friendly one because a controller hides the messy physics. Raw NAND hands you the naked array and makes you do the forensic math yourself.</p>
+  <div class="tgrid split">
+    <div class="chunks">
+      <div class="chunk"><h4 class="x" data-i18n="t0132">eMMC is basically an SD card with a job<span class="lvl b">basics</span></h4><p class="x" data-i18n="t0133">It's raw NAND plus a controller in one BGA, speaking the JEDEC MMC protocol, electrically the same family as an SD card. The controller does wear leveling, ECC, and bad blocks, so you read clean logical sectors. And it always boots in <b>1-bit mode</b>, so you only need six lines to get a full dump: CLK, CMD, DAT0, VCC, VCCQ, and ground.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0134">The eMMC-to-SD reader hack<span class="lvl i">the trick</span></h4><p class="x" data-i18n="t0135">Because it's MMC, solder those points to a cheap USB microSD reader and the host enumerates it as <span class="mono">/dev/sdX</span>, then it's just <span class="mono">dd</span>. Two things bite people: VCCQ has to be happy at the reader's 3.3V (many modern parts run 1.8V IO, so measure, wrong VCCQ can damage the die), and you must hold the <b>SoC</b> in reset (not the eMMC's own RST_n) so the CPU isn't booting off the same chip and fighting you.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0136">Don't miss the hidden partitions<span class="lvl i">loot</span></h4><p class="x" data-i18n="t0137">The disk you enumerate is only the user area. eMMC also has <b>boot0/boot1</b> (where the bootloader and fuse data often live), <b>RPMB</b> (authenticated anti-rollback, you can't read it without the key), and up to four GPPs. On Linux they show up as <span class="mono">mmcblk0boot0</span> etc, exported read only until <span class="mono">echo 0 &gt; .../force_ro</span>. <span class="mono">mmc extcsd read</span> dumps the config register. A naive "dd the user area" misses the good stuff.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0138">Raw NAND: a dump is not a filesystem<span class="lvl i">deep</span></h4><p class="x" data-i18n="t0139">Raw NAND (TSOP-48) gives you pages plus <b>OOB/spare</b> bytes holding ECC and bad-block markers. Three transforms stand between the dump and a mountable image: correct the bit errors with the exact ECC the SoC's controller used (Hamming or BCH, and it's the <i>controller</i> that defines the scheme, not the chip), skip the factory bad blocks, and often reverse a per-page scrambler that makes the raw silicon look like pure noise. Only then does binwalk see anything. Tools like OFRAK and Joshua Wise's FTL recovery show the full pipeline.</p></div><div class="chunk"><h4 class="x" data-i18n="t0622">The shortcut: read through the controller<span class="lvl i">escape hatch</span></h4><p class="x" data-i18n="t0623">Before you reverse ECC and a scrambler by hand, try the easy path: read the NAND <b>through the SoC's own controller</b> while the device runs. With a shell, <span class="mono">nanddump -f fw.bin -o /dev/mtd0</span> pulls a clean image, the driver already applied ECC and descrambling and the <span class="mono">-o</span> omits the OOB. That sidesteps the whole forensic pipeline. You only fall back to the offline reconstruction when the chip is dead or desoldered: then you strip the OOB yourself, and to spot a scrambler, look at a region that should be erased, if the <span class="mono">0xFF</span> pages come back as high-entropy noise instead of flat <span class="mono">0xFF</span>, a per-page randomizer is on and you need the controller's PRNG to undo it.</p></div>
+    </div>
+    <div>
+    <figure class="dg" data-id="emmc-sd">
+      <svg viewBox="0 0 620 250" role="img" aria-label="eMMC CLK CMD DAT0 VCC VCCQ VSS wired to a microSD reader, host sees a block device to dd">
+        <rect x="30" y="55" width="150" height="140" rx="8" class="chipfill soft" stroke-width="1.5"/><text x="105" y="46" text-anchor="middle" class="lbl">eMMC (BGA)</text>
+        <text x="45" y="82" font-size="12">CLK</text><text x="45" y="104" font-size="12">CMD</text><text x="45" y="126" font-size="12" class="accf">DAT0</text>
+        <text x="45" y="148" font-size="12" class="danf">VCC</text><text x="45" y="170" font-size="12">VCCQ</text><text x="45" y="192" font-size="12" class="danf">VSS</text>
+        <g class="soft" stroke-width="1.4" fill="none"><path d="M180 78 H 420"/><path d="M180 100 H 420"/><path d="M180 122 H 420"/><path d="M180 144 H 420"/><path d="M180 166 H 420"/><path d="M180 188 H 420"/></g>
+        <rect x="420" y="55" width="150" height="140" rx="8" class="chipfill soft" stroke-width="1.5"/><text x="495" y="46" text-anchor="middle" class="lbl">USB microSD reader</text>
+        <text x="558" y="82" text-anchor="end" font-size="12">CLK</text><text x="558" y="104" text-anchor="end" font-size="12">CMD</text>
+        <text x="558" y="126" text-anchor="end" font-size="12" class="accf">DAT0</text><text x="558" y="148" text-anchor="end" font-size="12" class="danf">VDD</text>
+        <text x="558" y="170" text-anchor="end" font-size="12">3V3</text><text x="558" y="192" text-anchor="end" font-size="12" class="danf">VSS</text>
+        <line x1="495" y1="195" x2="495" y2="224" class="acc" stroke-width="2" marker-end="url(#ar-acc)"/><text x="495" y="242" text-anchor="middle" class="accf" font-size="12.5">host: /dev/sdX  →  dd</text>
+      </svg>
+      <figcaption class="x" data-i18n="t0140">Wire the six lines to a card reader and the OS mounts the eMMC as a block device. VCCQ sets the bus level (1.8 or 3.3V), VCC feeds the NAND core.</figcaption>
+    </figure>
+    <figure class="dg" data-id="nand-oob" style="margin-top:16px">
+      <svg viewBox="0 0 620 170" role="img" aria-label="Raw NAND page: a data area followed by a small spare OOB area holding ECC and bad-block markers">
+        <rect x="40" y="55" width="380" height="46" class="chipfill soft" stroke-width="1.3"/><text x="230" y="83" text-anchor="middle" font-size="12">data area (2048 / 4096 B)</text>
+        <rect x="420" y="55" width="150" height="46" class="accwash soft" stroke-width="1.3"/><text x="495" y="77" text-anchor="middle" font-size="11" class="accf">spare / OOB</text><text x="495" y="93" text-anchor="middle" font-size="10" class="lbl">ECC + BBM</text>
+        <text x="230" y="43" text-anchor="middle" class="lbl" font-size="10.5">← one page →</text>
+        <text x="40" y="130" font-size="11" class="danf">raw = data + OOB per page, not a filesystem until ECC/bad-blocks/descramble are handled</text>
+      </svg>
+      <figcaption class="x" data-i18n="t0141">Raw NAND carries spare/OOB bytes for ECC and bad-block markers on every page. binwalk sees nothing until the OOB is stripped and ECC applied, which is exactly why managed eMMC is the easier target.</figcaption>
+    </figure>
+    </div>
+  </div>
+  
+  <div class="term" style="margin-top:16px">
+    <div class="term-top"><span class="led a"></span><span class="led"></span><span class="led"></span><span class="ttl">nand: through the controller, or reconstruct offline</span><button class="copy">copy</button></div>
+<pre><code><span class="c"># EASY: on the live device, let the SoC's NAND driver do ECC + descramble</span>
+cat /proc/mtd                              <span class="c"># which mtd holds the rootfs?</span>
+nanddump -f fw.bin -o /dev/mtd0            <span class="c"># -o omits OOB; driver already corrected ECC</span>
+
+<span class="c"># HARD: an off-chip raw dump (data+OOB). strip the OOB per page first:</span>
+python3 - &lt;&lt;'EOF'
+PAGE, OOB = 2048, 64                        # page + spare sizes from the datasheet
+raw  = open("raw.bin","rb").read()
+step = PAGE + OOB
+data = b"".join(raw[i:i+PAGE] for i in range(0, len(raw), step))
+open("nooob.bin","wb").write(data)         # now binwalk nooob.bin (ECC/descramble may still be needed)
+EOF</code></pre>
+  </div>
+  <div class="exs two">
+    <div class="ex"><span class="exn x" data-i18n="t0142">Amazon Echo firmware over eMMC</span><p class="x" data-i18n="t0143">River Loop identify the eMMC test points with a logic analyzer, read over the MMC bus, and carve the multi partition image (xloader, boot, main-A/B, recovery), a clean ISP walkthrough.</p><span class="ref">River Loop, HW 101 eMMC</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0144">Recovering an SD card's raw NAND</span><p class="x" data-i18n="t0145">After the controller died, Joshua Wise desoldered the NAND, read ~12GiB over an FPGA, and reverse engineered the BCH ECC, interleaving, and wear leveling to fully reconstruct the data. The definitive worked example.</p><span class="ref">joshuawise.com/ndfrecovery</span></div>
+  </div>
+  <div class="refs"><div class="rh">go deeper</div><ul>
+    <li><a href="https://riverloopsecurity.com/blog/2020/03/hw-101-emmc/">River Loop, dumping eMMC</a></li>
+    <li><a href="https://redballoonsecurity.com/flash-dump/">OFRAK, NAND flash dumps</a></li>
+    <li><a href="https://www.marcusfolkesson.se/blog/talk-about-ecc-and-nand-flashes/">Folkesson, ECC and NAND</a></li>
+    <li><a href="https://blackhat.com/docs/us-14/materials/us-14-Oh-Reverse-Engineering-Flash-Memory-For-Fun-And-Benefit-WP.pdf">Oh, RE Flash Memory (BH US-14)</a></li>
+  </ul></div>
+
+  <div class="tshoot fm">
+    <div class="tsh-h"><span class="fmtag">field manual</span> <span class="x" data-i18n="t0574">When it goes wrong</span></div>
+    <ul class="trios">
+    <li class="trio x" data-i18n="t0575"><b class="sy">eMMC won't enumerate in the SD reader.</b> <span class="cau"><b>Cause:</b> VCCQ mismatch, the SoC contending, or a floating CMD line.</span> <b>Play:</b> measure VCCQ and match it (many are 1.8V IO, the reader is 3.3V); hold the <b>SoC</b> in reset, not the eMMC's own <span class="mono">RST_n</span>; add a ~10k pull-up to CMD/DAT0. <span class="saver">⏱ in-circuit here saves a full reball</span></li>
+    <li class="trio x" data-i18n="t0576"><b class="sy">eMMC enumerates, but only one partition shows up.</b> <span class="cau"><b>Cause:</b> that's just the user area, the rest are separate hardware partitions.</span> <b>Play:</b> boot0/boot1/RPMB/GPP are their own devices; <span class="mono">echo 0 &gt; .../force_ro</span>, and <span class="mono">mmc extcsd read</span> the config register. The bootloader and fuse data usually live in <b>boot0</b>.</li>
+    <li class="trio x" data-i18n="t0577"><b class="sy">Raw NAND dump is pure noise.</b> <span class="cau"><b>Cause:</b> the dump still has OOB, uncorrected bit errors, bad blocks, and maybe scrambling.</span> <b>Play:</b> strip the OOB, apply the <i>exact</i> ECC the SoC controller used (Hamming vs BCH, the controller decides, not the chip), skip the bad blocks, and reverse the per-page scrambler. Only then does binwalk see anything.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 08 I2C / bus sniffing -->
+<section class="topic reveal" id="bus">
+  <div class="thead"><span class="tno">08</span><h3 class="tt x" data-i18n="t0146">I2C, SPI sniffing &amp; serial EEPROMs</h3><span class="chip-new">new</span></div>
+  <p class="tlede x" data-i18n="t0147">Flash isn't the only place secrets live. A tiny 8 pin I2C EEPROM next to the SoC often holds config, calibration, MAC addresses, and sometimes credentials or keys. Two wires, cheap tools, quick win.</p>
+  <div class="tgrid split">
+    <div class="chunks">
+      <div class="chunk"><h4 class="x" data-i18n="t0148">I2C in one paragraph<span class="lvl b">basics</span></h4><p class="x" data-i18n="t0149">Two wires, <b>SDA</b> (data) and <b>SCL</b> (clock), shared by a master and several devices, each at its own 7 bit address, with pull up resistors (~4.7k) to Vcc. Tap SDA/SCL with a logic analyzer and the sigrok I2C decoder to sniff config traffic passively, or become the master with a Bus Pirate or a Raspberry Pi and read a chip directly.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0150">Dumping a 24-series EEPROM<span class="lvl i">the win</span></h4><p class="x" data-i18n="t0151">These live at <span class="mono">0x50</span> to <span class="mono">0x57</span>. On Linux with a USB-I2C adapter, <span class="mono">i2cdetect</span> finds it and <span class="mono">i2cdump</span> reads it. The classic trap: on small parts (24C04/08/16) the "address" pins double as internal page selectors, so a 24C08 answers on several addresses and you must read each page. From 24C32 up (32 kbit / 4KB and larger) the chip switches to a 2 byte word address instead. Get that wrong and you get a truncated or repeating dump.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0152">Sniff SPI instead of clipping it<span class="lvl i">alt</span></h4><p class="x" data-i18n="t0153">Sometimes you don't want to fight the SoC for a flash chip, you just want to watch it boot. Put the logic analyzer on CLK/MOSI/MISO/CS and the sigrok SPI decoder reconstructs exactly what the SoC reads at power on, including the early bootloader fetch. It's passive, non destructive, and great for understanding a boot flow before you commit to a dump.</p></div>
+    </div>
+    <figure class="dg" data-id="i2c">
+      <svg viewBox="0 0 620 210" role="img" aria-label="I2C two-wire bus: one master and several addressed devices share SDA and SCL with pull-up resistors">
+        <line x1="60" y1="60" x2="580" y2="60" class="acc" stroke-width="1.8"/><text x="590" y="64" class="accf" font-size="11">SDA</text>
+        <line x1="60" y1="90" x2="580" y2="90" class="ver" stroke-width="1.8"/><text x="590" y="94" class="verf" font-size="11">SCL</text>
+        <line x1="90" y1="30" x2="90" y2="60" class="soft" stroke-width="1.3"/><line x1="120" y1="30" x2="120" y2="90" class="soft" stroke-width="1.3"/>
+        <line x1="60" y1="30" x2="140" y2="30" class="soft" stroke-width="1.3"/><text x="150" y="34" class="lbl" font-size="10">Vcc · pull-ups ~4.7k</text>
+        <rect x="70" y="120" width="110" height="56" rx="7" class="chipfill soft" stroke-width="1.3"/><text x="125" y="145" text-anchor="middle" font-size="12">master</text><text x="125" y="162" text-anchor="middle" font-size="10.5" class="lbl">Pi / Bus Pirate</text>
+        <rect x="250" y="120" width="110" height="56" rx="7" class="chipfill soft" stroke-width="1.3"/><text x="305" y="145" text-anchor="middle" font-size="12">EEPROM</text><text x="305" y="162" text-anchor="middle" font-size="10.5" class="accf">0x50</text>
+        <rect x="430" y="120" width="110" height="56" rx="7" class="chipfill soft" stroke-width="1.3"/><text x="485" y="145" text-anchor="middle" font-size="12">sensor</text><text x="485" y="162" text-anchor="middle" font-size="10.5" class="accf">0x68</text>
+        <g class="soft" stroke-width="1.2"><line x1="110" y1="120" x2="110" y2="60"/><line x1="140" y1="120" x2="140" y2="90"/><line x1="290" y1="120" x2="290" y2="60"/><line x1="320" y1="120" x2="320" y2="90"/><line x1="470" y1="120" x2="470" y2="60"/><line x1="500" y1="120" x2="500" y2="90"/></g>
+      </svg>
+      <figcaption class="x" data-i18n="t0154">Two wires, many devices, each at its own address. Sniff SDA/SCL to read config traffic, or become the master and <span class="mono">i2cdump</span> the EEPROM that so often holds the good stuff.</figcaption>
+    </figure>
+  </div>
+  <div class="term">
+    <div class="term-top"><span class="led a"></span><span class="led"></span><span class="led"></span><span class="ttl">read an I2C EEPROM (Linux)</span><button class="copy">copy</button></div>
+<pre><code>i2cdetect -y 1                 <span class="c"># find devices; a 24-series EEPROM shows at 0x50-0x57</span>
+i2cdump -y 1 0x50              <span class="c"># dump one 256-byte page</span>
+<span class="c"># small parts (24C08/16): the "address" LSBs are page selects — read each</span>
+<span class="c"># 24C32 and up use a 2-byte word address; use eeprom/at24 kernel driver or a programmer</span>
+i2cdump -y 1 0x51                                 <span class="c"># 24C08/16: also read 0x51/0x52/0x53 (page selects)</span>
+i2ctransfer -y 1 w2@0x50 0x00 0x00 r256           <span class="c"># 24C32+: 2-byte word address, read 256 B from 0</span></code></pre>
+  </div>
+  <div class="refs"><div class="rh">go deeper</div><ul>
+    <li><a href="https://wrongbaud.github.io/posts/Holiday-Teardown/">wrongbaud, I2C teardown</a></li>
+    <li><a href="https://sigrok.org/wiki/Protocol_decoders">sigrok protocol decoders</a></li>
+    <li><a href="http://dangerousprototypes.com/docs/Bus_Pirate">Bus Pirate docs</a></li>
+  </ul></div>
+<div class="tshoot fm">
+    <div class="tsh-h"><span class="fmtag">field manual</span> <span class="x" data-i18n="t0624">When it goes wrong</span></div>
+    <ul class="trios">
+    <li class="trio x" data-i18n="t0625"><b class="sy">The dump repeats every 256 bytes.</b> <span class="cau"><b>Cause:</b> on small parts (24C04/08/16) the low address bits are internal <b>page selects</b>, so the chip answers on several I2C addresses.</span> <b>Play:</b> read each page address and concatenate, e.g. a 24C08 is four pages across <span class="mono">0x50-0x53</span>; or use the kernel <span class="mono">at24</span> driver told the correct chip so it walks them for you.</li>
+    <li class="trio x" data-i18n="t0626"><b class="sy">The dump truncates at 256 bytes.</b> <span class="cau"><b>Cause:</b> from 24C32 up the chip takes a <b>2-byte word address</b>; a tool that sends one address byte wraps around.</span> <b>Play:</b> send a 16-bit address, e.g. <span class="mono">i2ctransfer -y 1 w2@0x50 0x00 0x00 r256</span> reads 256 bytes from offset 0; or use the <span class="mono">at24</span> driver with the right size, or a dedicated programmer.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 09 glitching -->
+<section class="topic reveal" id="glitch">
+  <div class="thead"><span class="tno">09</span><h3 class="tt x" data-i18n="t0155">Fault injection (glitching)</h3></div>
+  <p class="tlede x" data-i18n="t0156">This is the door for chips that just say no: read protected flash, encrypted firmware, secure boot. Instead of finding a software bug, you shove the chip outside its safe envelope for a few nanoseconds so it miscomputes one instruction at exactly the right moment. That single corrupted instruction can skip a signature check or flip a "deny" into an "allow". People have done it to hardware wallets, game consoles, and a Starlink dish, often with under $100 of gear.</p>
+  <div class="tgrid split">
+    <div class="chunks">
+      <div class="chunk"><h4 class="x" data-i18n="t0157">Break one instruction, not the chip<span class="lvl b">idea</span></h4><p class="x" data-i18n="t0158">A CPU assumes stable voltage and a clean clock. Violate that for a moment and a transistor latches wrong, so one instruction executes incorrectly: a compare returns the wrong answer, a branch isn't taken. You don't need surgical control over <i>what</i> breaks, just that it lands on a security critical instruction. It's probabilistic, so the whole job is repeatable timing plus a parameter sweep plus a lot of attempts.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0159">Voltage glitching with a crowbar<span class="lvl i">cheapest</span></h4><p class="x" data-i18n="t0160">The classic rig is a "crowbar": a power MOSFET across Vcc that the glitcher briefly shorts to ground for tens to hundreds of nanoseconds. Colin O'Flynn's crowbar paper is the canonical reference and it's exactly what a ChipWhisperer builds in.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0161">Clock, EM, and laser<span class="lvl i">the family</span></h4><p class="x" data-i18n="t0162"><b>Clock glitch</b>: insert one too short cycle to violate setup/hold, precise and cheap but only for externally clocked parts. <b>EMFI</b>: a coil pulse over the die, contactless, works through the package and on parts with internal regulators (O'Flynn's open source PicoEMP is the entry tool). <b>Laser</b>: a focused pulse through thinned silicon at ~1064nm gives single bit, single cycle precision, the most powerful and the most expensive.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0163">Trigger, sweep, detect<span class="lvl i">the loop</span></h4><p class="x" data-i18n="t0164">A glitch is useless if you can't place it at the same instant every time, so triggering is half the battle: a reset edge, a GPIO or UART byte, or a power pattern (a SAD trigger fires when the live trace matches a stored fingerprint). Then sweep offset, width, and strength, classify every attempt (normal / reset / mute / crash / <b>win</b>), and plot it. The golden glitch almost always sits on the boundary of the reset region, so you scan coarse, find that frontier, and zoom in. Yields under 1% are normal, so automate and be patient.</p></div><div class="chunk"><h4 class="x" data-i18n="t0606">The crowbar, for real<span class="lvl i">circuit</span></h4><p class="x" data-i18n="t0607">The crowbar is an N-channel power MOSFET: drain on the rail you want to collapse, source to GND. Drive the gate high and it saturates, shorting the rail to ground for tens to hundreds of ns, then releases. Two details make the rig. First, the gate is capacitive, so to switch in a few ns you need a <b>gate driver</b> pushing amps into it; a bare GPIO is too slow and the pulse turns into a lazy ramp (the ChipWhisperer already carries the driver and MOSFET on <span class="mono">glitch_hp</span>/<span class="mono">glitch_lp</span>). Second, the rail's decoupling caps are charge reservoirs that hold the voltage up and swallow your ns dip, so desolder the big ones near the chip to let the crowbar actually pull the rail down, leaving just enough that the board still boots between tries. And aim at the rail the <b>core</b> runs on: on an STM32F2/F4 that's <span class="mono">VCAP</span> (the internal 1.2V regulator's decoupling pin), not the 3.3V VDD.</p></div><div class="chunk"><h4 class="x" data-i18n="t0608">Trigger and oracle first<span class="lvl i">prep</span></h4><p class="x" data-i18n="t0609">Before you sweep a single parameter, lock down two repeatable things. The <b>trigger</b> anchors t-zero; on a concrete target the most reliable is the <b>reset edge</b>: fire on the rising <span class="mono">nRST</span> and count <span class="mono">ext_offset</span> cycles to the target instruction (the RDP check, the signature compare). A UART/GPIO byte the target emits, or a SAD trigger matching a power pattern, work when there's no clean edge. The <b>oracle</b> is how you know you won without watching: flash that returns bytes <span class="mono">!= 0xFF</span>, debug that answers after being blocked, a return value that only exists past the check. No oracle means you can't classify shots, and without classification the sweep is noise.</p></div><div class="chunk"><h4 class="x" data-i18n="t0610">Don't copy numbers, characterize<span class="lvl i">the search</span></h4><p class="x" data-i18n="t0611">The winning <span class="mono">(ext_offset, width)</span> depends on this die, this layout, this supply, and even temperature, so copying a number from a writeup almost never reproduces. Sweep coarse first: a wide <span class="mono">ext_offset</span> at a big step to bracket the window, a few widths, and classify every shot as normal / reset / mute / crash / win. The <b>reset region is your map</b>: the win almost always sits on the boundary between "normal" and "reset", strong enough to corrupt one instruction, weak enough not to drop the chip. Find that edge, shrink the range around it, cut the step, and raise the attempts per point (it's probabilistic; 1 win in 500 only shows if you insist). Under 1% yield is normal, so automate and let it run; change the board or the temperature and re-characterize.</p></div>
+    </div>
+    <div>
+    <figure class="dg" data-id="glitch">
+      <svg viewBox="0 0 620 250" role="img" aria-label="Voltage glitch: a brief VCC-core dip during the security check makes the CPU skip the halt and continue unlocked">
+        <line x1="60" y1="150" x2="590" y2="150" class="soft" stroke-width="1.2"/><text x="60" y="176" class="lbl" font-size="11">t →</text>
+        <text x="34" y="74" class="lbl" font-size="11" transform="rotate(-90 34 74)">VCC-core</text>
+        <rect x="300" y="60" width="90" height="90" class="accwash"/><text x="345" y="52" text-anchor="middle" class="lbl" font-size="10.5">security check</text>
+        <polyline points="70,90 345,90 590,90" class="soft" fill="none" stroke-width="1.6"/>
+        <polyline points="70,120 330,120 342,150 352,150 364,120 590,120" class="acc" fill="none" stroke-width="2"/>
+        <text x="80" y="86" class="lbl" font-size="10.5">normal Vcc</text><text x="80" y="135" class="accf" font-size="10.5">glitched Vcc</text>
+        <line x1="300" y1="60" x2="300" y2="150" class="soft" stroke-width="1" stroke-dasharray="3 3"/><text x="300" y="196" text-anchor="middle" class="lbl" font-size="10.5">trigger + offset</text>
+        <line x1="330" y1="207" x2="366" y2="207" class="dan" stroke-width="1.4"/><text x="348" y="223" text-anchor="middle" class="danf" font-size="10.5">width</text>
+        <text x="475" y="86" text-anchor="middle" class="lbl" font-size="10.5">verify → halt</text><text x="475" y="135" text-anchor="middle" class="accf" font-size="10.5">skip → unlocked</text>
+      </svg>
+      <figcaption class="x" data-i18n="t0165">Drop the core voltage for a few nanoseconds exactly when the CPU checks the signature, and it can skip that one instruction.</figcaption>
+    </figure>
+    <figure class="dg" data-id="glitch-grid" style="margin-top:16px">
+      <svg viewBox="0 0 520 220" role="img" aria-label="Glitch parameter search: a grid of offset versus width, most attempts crash or do nothing, a small cluster is a successful window">
+        <line x1="60" y1="40" x2="60" y2="180" class="soft" stroke-width="1.2"/><line x1="60" y1="180" x2="470" y2="180" class="soft" stroke-width="1.2"/>
+        <text x="265" y="205" text-anchor="middle" class="lbl" font-size="11">glitch offset →</text><text x="34" y="110" class="lbl" font-size="11" transform="rotate(-90 34 110)">width →</text>
+        <g class="softf"><circle cx="90" cy="60" r="3"/><circle cx="120" cy="90" r="3"/><circle cx="150" cy="150" r="3"/><circle cx="200" cy="70" r="3"/><circle cx="240" cy="120" r="3"/><circle cx="300" cy="160" r="3"/><circle cx="360" cy="80" r="3"/><circle cx="410" cy="140" r="3"/><circle cx="130" cy="120" r="3"/><circle cx="180" cy="160" r="3"/><circle cx="270" cy="60" r="3"/><circle cx="340" cy="150" r="3"/><circle cx="400" cy="70" r="3"/></g>
+        <g class="danf"><circle cx="220" cy="95" r="3"/><circle cx="250" cy="150" r="3"/><circle cx="330" cy="110" r="3"/></g>
+        <g class="accf"><circle cx="285" cy="100" r="4"/><circle cx="298" cy="106" r="4"/><circle cx="292" cy="92" r="4"/><circle cx="305" cy="98" r="4"/></g>
+        <circle cx="296" cy="99" r="22" class="acc" fill="none" stroke-width="1.5" stroke-dasharray="4 3"/><text x="296" y="55" text-anchor="middle" class="accf" font-size="10.5">WIN window</text>
+        <text x="452" y="35" text-anchor="end" class="lbl" font-size="10">grey=nothing · red=crash · copper=win</text>
+      </svg>
+      <figcaption class="x" data-i18n="t0166">You don't guess parameters, you sweep them. Wins cluster in a small window you find by scanning coarse, then zooming in.</figcaption>
+    </figure>
+    </div>
+  </div>
+  
+  <div class="term" style="margin-top:16px">
+    <div class="term-top"><span class="led a"></span><span class="led"></span><span class="led"></span><span class="ttl">chipwhisperer: voltage-glitch sweep</span><button class="copy">copy</button></div>
+<pre><code>import chipwhisperer as cw
+scope  = cw.scope()
+target = cw.target(scope)
+scope.default_setup()
+
+<span class="c"># crowbar voltage glitch — drive the board's high-power MOSFET</span>
+scope.glitch.clk_src     = "clkgen"       <span class="c"># glitch clocked off the target clock</span>
+scope.glitch.output      = "glitch_only"  <span class="c"># crowbar pulse, not clock-XOR</span>
+scope.glitch.trigger_src = "ext_single"   <span class="c"># one glitch per external trigger</span>
+scope.io.glitch_hp       = True
+scope.io.glitch_lp       = False
+
+<span class="c"># three axes — you SWEEP, never guess. ranges are a start point, characterize per target.</span>
+gc = cw.GlitchController(groups=["success","reset","normal"],
+                         parameters=["ext_offset","repeat","width"])
+gc.set_range("ext_offset", 0, 1500)   <span class="c"># WHERE: cycles after the trigger (bracket the check)</span>
+gc.set_range("repeat",     1, 8)      <span class="c"># HOW LONG: cycles the crowbar holds the short</span>
+gc.set_range("width",      1, 48)     <span class="c"># fine pulse width (% of period, CW-Lite convention)</span>
+gc.set_global_step(2)                 <span class="c"># coarse first; refine on the boundary</span>
+
+for g in gc.glitch_values():
+    scope.glitch.ext_offset, scope.glitch.repeat, scope.glitch.width = g
+    target.flush(); scope.arm()
+    reset_target(scope)               <span class="c"># release nRST — the glitch fires on that edge</span>
+    if scope.capture():               <span class="c"># True = no trigger seen / target dead</span>
+        gc.add("reset")
+    elif unlocked(target.read(timeout=50)):   <span class="c"># ORACLE: dump != 0xFF, debug alive, forbidden reply</span>
+        gc.add("success"); print("WIN", g)
+    else:
+        gc.add("normal")
+<span class="c"># reset_target()/unlocked() are yours. plot width×offset colored by group and</span>
+<span class="c"># hunt the 'success' cluster hugging the edge of the reset region.</span></code></pre>
+  </div>
+  <div class="minis two">
+    <div class="mini spec"><div class="mh">◆ <span class="x" data-i18n="t0167">tools &amp; targets</span></div><ul>
+      <li class="x" data-i18n="t0168">STM32 <b>RDP</b>: L1 blocks flash read, L2 permanently kills debug. L1 is the common glitch target.</li>
+      <li class="x" data-i18n="t0169">Gear: ChipWhisperer (Nano ~$50 → Husky ~$500), DIY MOSFET crowbar (~$5), PicoEMP (EMFI, &lt;$50).</li>
+      <li class="x" data-i18n="t0170">Any protection that funnels through one compare/branch is a glitch target.</li>
+    </ul></div>
+    <div class="mini watch"><div class="mh">▲ <span class="x" data-i18n="t0171">watch out</span></div><ul>
+      <li class="x" data-i18n="t0172"><b>EMFI/laser gear runs at hundreds of volts to kV.</b> Discharge caps through a resistor, mind the eye hazard, never bypass interlocks.</li>
+      <li class="x" data-i18n="t0173">Too deep a glitch bricks the part, so start weak. Re-characterize per board and per temperature.</li>
+      <li class="x" data-i18n="t0174">A glitch doesn't decrypt firmware, it buys you code exec or debug from which you dump keys.</li>
+    </ul></div>
+  </div>
+  <div class="exs two">
+    <div class="ex"><span class="exn x" data-i18n="t0175">Trezor One / KeepKey (wallet.fail)</span><p class="x" data-i18n="t0176">STM32F205 wallets: a voltage glitch at boot downgrades RDP2 to RDP1, re-enabling debug so the encrypted seed can be dumped. Kraken later reproduced it as a ~15 minute physical attack.</p><span class="ref">Nedospasov, Roth, Datko · 35C3 2018</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0177">Starlink dish rooted on stage</span><p class="x" data-i18n="t0178">Lennert Wouters voltage-faulted the SoC ROM bootloader's signature check to run custom code on the dish, with a ~$25 modchip (RP2040 + regulator).</p><span class="ref">Black Hat USA 2022</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0179">Generic secure boot bypass</span><p class="x" data-i18n="t0180">Riscure's foundational demo: glitch the signature-check branch in a secure boot flow and unsigned code runs. The template everyone reuses.</p><span class="ref">Timmers &amp; Spruyt · BH EU 2016</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0181">Nintendo Switch, glitch vs. software</span><p class="x" data-i18n="t0182">Worth getting right: Fusée Gelée (CVE-2018-6242) is a USB bootROM <i>software</i> overflow, not a glitch. Patched Switches are instead attacked with voltage-glitching modchips.</p><span class="ref">fail0verflow shofEL2</span></div>
+  </div>
+  <div class="refs"><div class="rh">go deeper</div><ul>
+    <li><a href="https://eprint.iacr.org/2016/810.pdf">O'Flynn, Crowbar fault injection</a></li>
+    <li><a href="https://www.blackhat.com/docs/eu-16/materials/eu-16-Timmers-Bypassing-Secure-Boot-Using-Fault-Injection.pdf">Timmers &amp; Spruyt, Secure boot via FI</a></li>
+    <li><a href="https://chipwhisperer.readthedocs.io/en/latest/">ChipWhisperer docs</a></li>
+    <li><a href="https://github.com/newaetech/chipshouter-picoemp">PicoEMP (open-source EMFI)</a></li>
+    <li><a href="https://jerinsunny.github.io/stm32_vglitch/">STM32F4 voltage glitch, concrete params</a></li>
+  </ul></div>
+
+  <div class="tshoot fm">
+    <div class="tsh-h"><span class="fmtag">field manual</span> <span class="x" data-i18n="t0578">When it goes wrong</span></div>
+    <ul class="trios">
+    <li class="trio x" data-i18n="t0579"><b class="sy">Glitching does nothing across thousands of attempts.</b> <span class="cau"><b>Cause:</b> no stable trigger, the wrong rail, decoupling caps eating the glitch, or too coarse a sweep.</span> <b>Play:</b> nail a repeatable trigger first (reset edge, a GPIO/UART byte, a SAD power pattern); target the <b>core</b> rail, not the 3.3V IO; desolder the bulk caps near the chip; sweep a grid and hunt the boundary of the reset region, then zoom in.</li>
+    <li class="trio x" data-i18n="t0612"><b class="sy">Only resets, never a win.</b> <span class="cau"><b>Cause:</b> the window (<span class="mono">ext_offset</span>) doesn't cover the check, the step is too coarse to land on the spot, or the oracle is too strict.</span> <b>Play:</b> validate the oracle with a case you KNOW passes; widen <span class="mono">ext_offset</span> to be sure it brackets the check; on the edge of the reset region, cut the step and add attempts per point, the win sits a hair from the reset and a big step jumps over it.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 10 SCA -->
+<section class="topic reveal" id="sca">
+  <div class="thead"><span class="tno">10</span><h3 class="tt x" data-i18n="t0183">Side-channel analysis</h3><span class="chip-new">new</span></div>
+  <p class="tlede x" data-i18n="t0184">Glitching makes a chip misbehave. Side-channel analysis just <i>watches</i> it behave and reads the secret out of the leakage. The current a chip draws depends on the data it's crunching, so with enough power traces and some statistics you can pull an AES key out of a device that has no software bug at all.</p>
+  <div class="tgrid split">
+    <div class="chunks">
+      <div class="chunk"><h4 class="x" data-i18n="t0185">Why chips leak<span class="lvl b">idea</span></h4><p class="x" data-i18n="t0186">In CMOS logic, a gate burns a little more power when a bit flips than when it stays put, so the instantaneous current carries a faint imprint of the data being processed. Measure that current over time and you get a power "trace." <b>SPA</b> reads secrets from a single trace by eye (an RSA square-and-multiply looks different for a 1 vs a 0). <b>DPA</b> and <b>CPA</b> use statistics over many traces to pull out a key even when the leak is buried in noise.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0187">Measuring it: shunt or EM probe<span class="lvl b">setup</span></h4><p class="x" data-i18n="t0188">Put a small shunt resistor in the chip's Vcc line and measure the voltage across it (current = data-dependent power), or hold a near-field EM probe over the die to pick it up contactlessly. Then trigger on the crypto op and capture. A ChipWhisperer bundles the shunt, a synchronized ADC, and the target, which is why it's the standard learning platform.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0189">Recovering AES-128 with CPA<span class="lvl i">the attack</span></h4><p class="x" data-i18n="t0190">The trick is that AES's first-round SubBytes depends only on one key byte and one known plaintext byte, so you attack one byte at a time. For each of 256 guesses you predict the leakage (usually the Hamming weight of the SBox output) and correlate that prediction against your measured traces. The correct guess spikes in correlation and the other 255 stay flat. Repeat for all 16 bytes and you have the key. An unprotected software AES often falls in a few hundred to a few thousand traces.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0191">Alignment, POIs, and countermeasures<span class="lvl i">deep</span></h4><p class="x" data-i18n="t0192">Real traces are misaligned and noisy, so you preprocess: align (even elastic alignment via dynamic time warping), filter, and pick points of interest, and use <b>TVLA</b> (a fixed vs random t-test, |t| &gt; 4.5) to check whether a device leaks at all before you attack. <b>Template attacks</b> profile a clone device first and are the strongest class when you can. Defenses are masking (randomize intermediate values), hiding (shuffling, random delays), and constant time code, which raise the trace count rather than making it impossible.</p></div><div class="chunk"><h4 class="x" data-i18n="t0615">The measurement rig<span class="lvl b">setup</span></h4><p class="x" data-i18n="t0616">Two ways to see the current. A <b>shunt</b>: a small resistor (~1-50 Ω) in series with the chip's Vcc or ground, and you probe the voltage across it. Bigger R means more signal but more IR drop, so it can brown the chip out; put it in the <b>ground</b> leg to keep the probe near GND. A <b>near-field EM probe</b> is contactless, a tiny loop over the die or a decoupling cap, no cut traces, and you can move it to the leakiest spot. Either way, <b>trigger on the crypto op</b> (a GPIO the target raises around encrypt, or a pattern trigger) and sample well above the device clock, roughly 5-10×, so each clock cycle spreads over several points.</p></div><div class="chunk"><h4 class="x" data-i18n="t0617">TVLA first: does it even leak?<span class="lvl i">go / no-go</span></h4><p class="x" data-i18n="t0618">Before you spend hours on CPA, run <b>TVLA</b> as a go/no-go. Capture two trace sets, one with a <b>fixed</b> plaintext and one with <b>random</b> plaintext (keep the key fixed), then run Welch's t-test point by point. If <span class="mono">|t|</span> crosses <b>4.5</b> anywhere in the crypto window, the device leaks and an attack is worth it; if it stays flat, either it's well protected or your rig/trigger is wrong, fix that before attacking. TVLA also tells you <i>where</i> in time the leak is, which seeds your points of interest and your alignment. It's the cheapest hour you'll spend.</p></div>
+    </div>
+    <figure class="dg" data-id="sca">
+      <svg viewBox="0 0 640 220" role="img" aria-label="Side-channel: a shunt resistor on the core rail turns power into a trace whose peaks correlate with the secret key">
+        <rect x="24" y="70" width="90" height="60" rx="8" class="chipfill soft" stroke-width="1.3"/><text x="69" y="96" text-anchor="middle" font-size="12">chip</text><text x="69" y="113" text-anchor="middle" font-size="10.5" class="lbl">runs AES</text>
+        <rect x="128" y="92" width="24" height="16" class="softbox"/><text x="140" y="126" text-anchor="middle" class="lbl" font-size="10">shunt R</text>
+        <line x1="114" y1="100" x2="128" y2="100" class="soft" stroke-width="1.4"/><line x1="152" y1="100" x2="176" y2="100" class="acc" stroke-width="1.6" marker-end="url(#ar-acc)"/><text x="176" y="90" class="accf" font-size="10">V ∝ current</text>
+        <rect x="200" y="40" width="410" height="120" rx="8" class="softbox" stroke-width="1.2"/>
+        <polyline points="210,120 230,118 245,80 258,120 275,120 290,72 303,120 320,118 338,90 352,120 375,120 392,68 405,120 425,118 442,86 456,120 480,120 498,120 520,118 545,120 575,118 600,120" class="acc" fill="none" stroke-width="1.6"/>
+        <text x="405" y="60" text-anchor="middle" class="lbl" font-size="10.5">power trace — one peak per round/op</text>
+        <line x1="405" y1="160" x2="405" y2="186" class="acc" stroke-width="1.8" marker-end="url(#ar-acc)"/><text x="405" y="204" text-anchor="middle" class="accf" font-size="11.5">CPA over many traces → key bytes</text>
+      </svg>
+      <figcaption class="x" data-i18n="t0193">The current a chip draws depends on the data it processes. Measure it across a shunt, collect thousands of traces, and correlation recovers the key. No glitch, no code execution.</figcaption>
+    </figure>
+  </div>
+  
+  <div class="term">
+    <div class="term-top"><span class="led a"></span><span class="led"></span><span class="led"></span><span class="ttl">CPA: recover AES-128 one byte at a time</span><button class="copy">copy</button></div>
+<pre><code><span class="c"># the practical path — ChipWhisperer's analyzer does the whole attack</span>
+import chipwhisperer.analyzer as cwa
+leak = cwa.leakage_models.sbox_output          <span class="c"># Hamming weight of SubBytes output</span>
+attack = cwa.cpa(project, leak)                <span class="c"># project = captured traces + plaintext</span>
+key = attack.run().key_guess()                 <span class="c"># 16 recovered subkey bytes</span>
+
+<span class="c"># the mechanism, byte k, so you know what it does (traces: N x T, pt: N bytes):</span>
+import numpy as np
+HW = np.array([bin(x).count("1") for x in range(256)])
+for k in range(16):
+    best = (0.0, None)
+    for guess in range(256):
+        h = HW[SBOX[pt[:, k] ^ guess]]         <span class="c"># predicted leakage, one per trace</span>
+        r = np.abs([np.corrcoef(h, traces[:, t])[0, 1] for t in range(T)])
+        if np.nanmax(r) &gt; best[0]:
+            best = (np.nanmax(r), guess)        <span class="c"># right guess spikes; other 255 stay flat</span>
+    print(k, hex(best[1]))</code></pre>
+  </div>
+  <div class="exs two">
+    <div class="ex"><span class="exn x" data-i18n="t0194">DPA is born (1999)</span><p class="x" data-i18n="t0195">Kocher, Jaffe &amp; Jun broke DES on smartcards with a difference-of-means over power traces and launched the whole field. CPA (Brier, Clavier, Olivier, 2004) made it trace-efficient with a correlation model.</p><span class="ref">CRYPTO 1999 · CHES 2004</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0196">Trezor One PIN via SCA</span><p class="x" data-i18n="t0197">Ledger's Donjon lab recovered the Trezor One PIN with a power side channel, inside the device's 15-attempt limit, and disclosed it responsibly.</p><span class="ref">Ledger Donjon, eprint 2019/401</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0198">KeeLoq keyless entry, fully broken</span><p class="x" data-i18n="t0199">DPA on KeeLoq garage/car remote chips recovered device keys from ~10 traces and even extracted manufacturer keys, enabling cloning.</p><span class="ref">Eisenbarth/Kasper/Paar, CRYPTO 2008</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0200">ChipWhisperer SCA101</span><p class="x" data-i18n="t0201">The canonical hands-on: capture traces from a tiny-AES target and recover the full AES-128 key one byte at a time. The best way to actually learn CPA.</p><span class="ref">NewAE chipwhisperer-jupyter</span></div>
+  </div>
+  <div class="refs"><div class="rh">go deeper</div><ul>
+    <li><a href="https://www.iacr.org/archive/ches2004/31560016/31560016.pdf">Brier/Clavier/Olivier, CPA</a></li>
+    <li><a href="https://chipwhisperer.readthedocs.io/en/latest/">ChipWhisperer docs</a></li>
+    <li><a href="https://github.com/newaetech/chipwhisperer-jupyter">ChipWhisperer SCA101 labs</a></li>
+    <li><a href="https://www.ledger.com/blog/breaking-trezor-one-with-sca">Ledger, Breaking Trezor One with SCA</a></li>
+  </ul></div>
+</section>
+
+<!-- 11 gear ladder -->
+<section class="topic reveal" id="gear">
+  <div class="thead"><span class="tno">11</span><h3 class="tt x" data-i18n="t0202">The gear ladder: what to buy, in order</h3></div>
+  <p class="tlede x" data-i18n="t0203">The nasty failure mode of this hobby is spending $600 on a ChipWhisperer before you own a $15 multimeter. Climb a tier only when a real project blocks you, and your first setup can already read a chip and open a console for the price of a pizza.</p>
+  <div class="chunks">
+    <div class="chunk"><h4 class="x" data-i18n="t0204">Tier 1 (~$30-60): console + flash<span class="lvl b">start here</span></h4><p class="x" data-i18n="t0205">Ninety percent of beginner extraction, cheap: a <b>multimeter</b> with a beeper, a <b>USB-UART adapter</b> (3.3V default; cheap ones only do 3.3/5V, a real 1.8V target needs a level shifting adapter), a <b>CH341A + SOIC-8 clip</b>, and a basic temperature controlled iron. Don't skip the multimeter, you measure the logic voltage before every single connection.</p></div>
+    <div class="chunk"><h4 class="x" data-i18n="t0206">Tier 2 (~$120-250): see signals, rework SMD<span class="lvl i">level up</span></h4><p class="x" data-i18n="t0207">A cheap <b>8 channel logic analyzer</b> (FX2 clone in sigrok/PulseView) turns "UART or SPI?" into a decode. A <b>hot air station</b> lifts chips a clip can't reach. Add an <b>ESD mat + strap</b>, a <b>bench PSU with current limit</b>, and <b>helping hands</b>. This is the difference between reading a device and modifying one.</p></div>
+    <div class="chunk"><h4 class="x" data-i18n="t0208">Tier 3 (specialist, buy for the project)<span class="lvl i">only when needed</span></h4><p class="x" data-i18n="t0209">Single purpose and pricey: a <b>JTAGulator</b> for unknown pinouts, a <b>Tigard or J-Link</b> for reliable debug, a <b>ChipWhisperer</b> for glitching and side channel, an <b>eMMC programmer</b> plus preheater and microscope for BGA storage. No concrete need means you're not ready to spend here.</p></div>
+    <div class="chunk"><h4 class="x" data-i18n="t0210">The Flipper Zero, honestly<span class="lvl i">real talk</span></h4><p class="x" data-i18n="t0211">Genuinely handy as a GPIO bridge and fun to carry, decent USB-UART, can bit-bang SPI/I2C. But its sampling is nowhere near a real logic analyzer and it's no substitute for a CH341A on a multi-MB flash. Buy it as a pocket toolkit, not a lab.</p></div>
+  </div>
+  <div class="callout tip"><div class="lab">◆ <span class="x" data-i18n="t0212">software stack (free, install today)</span></div><p class="x" data-i18n="t0213"><span class="mono">sigrok/PulseView</span> (logic analyzer + decoders), <span class="mono">OpenOCD</span> (JTAG/SWD), <span class="mono">flashrom</span> (SPI), <span class="mono">binwalk / unblob</span> (carve firmware), <span class="mono">radare2</span> or Cutter (disassemble), <span class="mono">picocom</span> (serial), <span class="mono">QEMU / FirmAE</span> (emulate). End to end without a single license.</p></div>
+</section>
+
+<div class="thread fm" id="case1"><div class="th-h"><span class="fmtag">field manual</span> <span class="x" data-i18n="t0580">Running case: a cheap SOHO router, Part I</span></div>
+<p class="x" data-i18n="t0581">To make it concrete, walk one typical MediaTek/Realtek SOHO router end to end. You spot the 8-pin SPI-NOR next to the SoC, clip on, and the first read is all <span class="mono">0xFF</span>: contention, because the SoC boots off that same chip. You tie its <span class="mono">/RST</span> low, read twice, the hashes match, and you have the image without desoldering. UART is a 4-pad header; the pad that jitters at power-on is TX, so you match 3.3V, cross TX/RX, and land in U-Boot at 115200. <span class="mono">printenv</span> leaks the bootargs and the flash layout. Part I got you the bytes.</p></div>
+
+<section class="part reveal" id="part2">
+  <div class="pnum">PART II</div>
+  <h2 class="ph x" data-i18n="t0400">Firmware: analyzing the bytes</h2>
+  <p class="pdesc x" data-i18n="t0401">You've got the image. This half is the 2024/2025 workflow: extract it with tools that don't lie about offsets, inventory every component and clear the n-days automatically, then run it under emulation, take it apart in radare2, and use taint analysis to find the source-to-sink paths that turn into real CVEs. Static-first, so a dead SPI chip doesn't stop you.</p>
+</section>
+
+<!-- 12 unpack / pipeline -->
+<section class="topic reveal" id="unpack">
+  <div class="thead"><span class="tno">12</span><h3 class="tt x" data-i18n="t0402">Acquire, unpack &amp; the automated pipeline</h3></div>
+  <p class="tlede x" data-i18n="t0403">A firmware image is a container of containers: a vendor header, compressed blobs, and one or more filesystems concatenated with padding and checksums. The unpacker's job is to find each chunk's start <i>and</i> end, carve it, decompress or mount it, and recurse. Getting the end offset right is what separates the modern tools from the old ones.</p>
+  <div class="tgrid split">
+    <div class="chunks">
+      <div class="chunk"><h4 class="x" data-i18n="t0404">binwalk v3 and unblob<span class="lvl b">basics</span></h4><p class="x" data-i18n="t0405">binwalk got a full <b>Rust rewrite</b> (v3.1.0, ReFirmLabs, Oct 2024): same <span class="mono">binwalk -e</span> / <span class="mono">-M</span> (matryoshka recursion) muscle memory, faster, plus a library API. <b>unblob</b> (ONEKEY) is the accuracy play: 78+ formats, it computes each chunk's end from the format spec so it doesn't over-extract into the false-positive trees binwalk is infamous for, runs sandboxed and unprivileged, and even patched path-traversal bugs in the extractors it drives. Reach for unblob when binwalk's output is a mess.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0406">Front-load the boring part: SBOM then CVEs<span class="lvl i">pipeline</span></h4><p class="x" data-i18n="t0407">Modern review is a straight line you can script: extract, build a Software Bill of Materials, map it to known CVEs, then reverse only what's left. <b>syft</b> inventories the rootfs into CycloneDX/SPDX; <b>cve-bin-tool</b> (Intel, ~448 checkers) fingerprints component versions <i>inside</i> stripped binaries (OpenSSL, BusyBox, zlib, expat) and queries NVD/OSV/others. The n-day pass runs itself so your time goes to the parts a scanner can't reach.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0408">EMBA, FACT, cwe_checker<span class="lvl i">automated</span></h4><p class="x" data-i18n="t0409"><b>EMBA</b> (Michael Messner / Siemens Energy) orchestrates the whole OWASP-FSTM flow: extract, static analysis, SBOM, CVE aggregation, system emulation, and a browsable HTML report. It wires in <b>cwe_checker</b> (Fraunhofer FKIE), which lifts ARM/MIPS/PPC/x86 binaries through Ghidra P-Code and flags ~18 CWE classes (CWE-78 command injection, CWE-119/125/787 overflows, CWE-134 format string). <b>FACT</b> adds a web UI whose signature feature is diffing two firmware versions to spot silent patches.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0410">Encrypted image? Entropy tells you to stop<span class="lvl i">gem</span></h4><p class="x" data-i18n="t0411">Both tools compute entropy. A structured region around 0.9 to 0.99 is usually compression; near-uniform ~1.0 across the <i>whole</i> file with no low-entropy headers and nothing extractable is an encrypted or signed OTA blob. unblob adds a chi-square check to cut the guesswork. When you hit that wall, the software unpacker did its job by telling you extraction alone won't work: pivot to UART/JTAG or bootloader analysis to recover the key or a plaintext update.</p></div>
+    </div>
+    <div>
+    <figure class="dg" data-id="pipeline">
+      <svg viewBox="0 0 640 130" role="img" aria-label="Automated firmware pipeline: extract, build an SBOM, map versions to CVEs, then reverse-engineer the interesting targets">
+        <rect x="20" y="45" width="130" height="46" rx="8" class="chipfill soft" stroke-width="1.3"/><text x="85" y="66" text-anchor="middle" font-size="11">extract</text><text x="85" y="81" text-anchor="middle" font-size="9" class="lbl">unblob · binwalk v3</text>
+        <rect x="180" y="45" width="130" height="46" rx="8" class="chipfill soft" stroke-width="1.3"/><text x="245" y="66" text-anchor="middle" font-size="11">SBOM</text><text x="245" y="81" text-anchor="middle" font-size="9" class="lbl">EMBA · syft</text>
+        <rect x="340" y="45" width="130" height="46" rx="8" class="chipfill soft" stroke-width="1.3"/><text x="405" y="66" text-anchor="middle" font-size="11">CVE map</text><text x="405" y="81" text-anchor="middle" font-size="9" class="lbl">cve-bin-tool</text>
+        <rect x="500" y="45" width="130" height="46" rx="8" class="accwash soft" stroke-width="1.3"/><text x="565" y="66" text-anchor="middle" font-size="11" class="accf">targeted RE</text><text x="565" y="81" text-anchor="middle" font-size="9" class="lbl">radare2 · taint</text>
+        <line x1="150" y1="68" x2="178" y2="68" class="acc" stroke-width="1.8" marker-end="url(#ar-acc)"/><line x1="310" y1="68" x2="338" y2="68" class="acc" stroke-width="1.8" marker-end="url(#ar-acc)"/><line x1="470" y1="68" x2="498" y2="68" class="acc" stroke-width="1.8" marker-end="url(#ar-acc)"/>
+        <text x="320" y="120" text-anchor="middle" class="lbl" font-size="10.5">the n-day pass runs itself; your time goes into the last box</text>
+      </svg>
+      <figcaption class="x" data-i18n="t0412">Extract, inventory every component into an SBOM, auto-map versions to known CVEs. That clears the n-days for free so your reversing time goes to what a scanner can't reach.</figcaption>
+    </figure>
+    <figure class="dg" data-id="entropy" style="margin-top:16px">
+      <svg viewBox="0 0 620 200" role="img" aria-label="Entropy over file offset near 1.0 for encrypted data with a dip at a plaintext window to carve">
+        <line x1="60" y1="160" x2="590" y2="160" class="soft" stroke-width="1.2"/><line x1="60" y1="36" x2="60" y2="160" class="soft" stroke-width="1.2"/>
+        <text x="52" y="48" text-anchor="end" class="lbl" font-size="10.5">1.0</text><text x="52" y="158" text-anchor="end" class="lbl" font-size="10.5">0</text>
+        <text x="325" y="190" text-anchor="middle" class="lbl" font-size="11">file offset →</text><text x="30" y="100" class="lbl" font-size="11" transform="rotate(-90 30 100)">entropy</text>
+        <rect x="140" y="36" width="70" height="124" class="accwash"/>
+        <polyline points="70,54 120,58 150,114 175,126 200,92 230,52 320,51 430,52 520,51 585,52" class="acc" fill="none" stroke-width="2"/>
+        <line x1="175" y1="36" x2="175" y2="160" class="acc" stroke-width="1" stroke-dasharray="3 3"/><text x="175" y="30" text-anchor="middle" class="accf" font-size="10.5">plaintext window</text><text x="175" y="178" text-anchor="middle" class="accf" font-size="10.5">carve here</text>
+        <text x="430" y="46" text-anchor="middle" class="lbl" font-size="10.5">flat ≈ 1.0 → encrypted/compressed</text>
+      </svg>
+      <figcaption class="x" data-i18n="t0413">Near-uniform entropy across the whole image means encrypted or compressed. A dip is a plaintext header or loader, and that offset is where a carve actually works.</figcaption>
+    </figure>
+    </div>
+  </div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Magic</th><th>What</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td class="hex">27 05 19 56</td><td class="what">uImage</td><td class="note x" data-i18n="t0414">U-Boot kernel header (name/load addr inside)</td></tr>
+      <tr><td class="hex">"hsqs"</td><td class="what">SquashFS</td><td class="note x" data-i18n="t0415">the rootfs, usually; xz/gzip/lzma inside</td></tr>
+      <tr><td class="hex">5D 00 00</td><td class="what">LZMA</td><td class="note x" data-i18n="t0416">bare kernel/rootfs stream</td></tr>
+      <tr><td class="hex">1F 8B 08</td><td class="what">gzip</td><td class="note x" data-i18n="t0417">very common wrapper</td></tr>
+      <tr><td class="hex">85 19 / 19 85</td><td class="what">JFFS2</td><td class="note x" data-i18n="t0418">writable NOR/NAND rootfs</td></tr>
+      <tr><td class="hex">"UBI#"</td><td class="what">UBI</td><td class="note x" data-i18n="t0419">NAND volume layer (ubifs inside)</td></tr>
+      <tr><td class="hex">D0 0D FE ED</td><td class="what">DTB</td><td class="note x" data-i18n="t0420">device tree, the hardware map</td></tr>
+      <tr><td class="hex">"ANDROID!"</td><td class="what">boot.img</td><td class="note x" data-i18n="t0421">Android kernel + ramdisk container</td></tr>
+    </tbody>
+  </table></div>
+  <div class="exs two">
+    <div class="ex"><span class="exn x" data-i18n="t0422">SaTC: 33 bugs from the extract-then-RE path</span><p class="x" data-i18n="t0423">This exact pipeline (unpack, then trace input keywords to sinks) is what modern static tools automate, and it produces real bugs at scale.</p><span class="ref">USENIX Security 2021</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0424">TP-Link Archer AX21</span><p class="x" data-i18n="t0425">CVE-2023-1389, unauth command injection in the <span class="mono">country</span> field, found via extract-then-reverse, shown at Pwn2Own Toronto 2022, then weaponized by Mirai within weeks.</p><span class="ref">ZDI-23-451</span></div>
+  </div>
+  <div class="refs"><div class="rh">tools &amp; refs</div><ul>
+    <li><a href="https://github.com/ReFirmLabs/binwalk">binwalk v3 (Rust)</a></li>
+    <li><a href="https://unblob.org/">unblob</a></li>
+    <li><a href="https://github.com/e-m-b-a/emba">EMBA</a></li>
+    <li><a href="https://github.com/fkie-cad/cwe_checker">cwe_checker</a></li>
+    <li><a href="https://github.com/intel/cve-bin-tool">cve-bin-tool</a></li>
+    <li><a href="https://github.com/anchore/syft">syft (SBOM)</a></li>
+    <li><a href="https://github.com/fkie-cad/FACT_core">FACT</a></li>
+  </ul></div>
+
+  <div class="tshoot fm">
+    <div class="tsh-h"><span class="fmtag">field manual</span> <span class="x" data-i18n="t0582">When it goes wrong</span></div>
+    <ul class="trios">
+    <li class="trio x" data-i18n="t0583"><b class="sy">binwalk floods false positives or over-extracts into junk.</b> <span class="cau"><b>Cause:</b> it matches a signature's start but not its real end.</span> <b>Play:</b> switch to <b>unblob</b>, which computes each chunk's end from the format spec, then sanity-check with entropy. <span class="saver">⏱ turns an unreadable tree into a clean rootfs</span></li>
+    <li class="trio x" data-i18n="t0584"><b class="sy">Entropy is flat ~1.0 across the whole image.</b> <span class="cau"><b>Cause:</b> the firmware is an encrypted or compressed OTA blob.</span> <b>Play:</b> software unpacking won't help; pivot to UART/JTAG/bootloader to recover the key or grab a plaintext update. A localized entropy <b>dip</b> is a plaintext header or loader, so carve from that offset.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 13 emulation + fuzzing -->
+<section class="topic reveal" id="emulate">
+  <div class="thead"><span class="tno">13</span><h3 class="tt x" data-i18n="t0426">Emulation, rehosting &amp; fuzzing</h3><span class="chip-new">modern</span></div>
+  <p class="tlede x" data-i18n="t0427">Rehosting means running firmware without its hardware so you can instrument it, snapshot it, and fuzz it in parallel. The whole field is a fight between fidelity and speed, and it split into two lines: Linux router/IoT rehosting, and bare-metal MCU rehosting where every peripheral register has to be modeled.</p>
+  <div class="tgrid split">
+    <div class="chunks">
+      <div class="chunk"><h4 class="x" data-i18n="t0428">User-mode vs full-system QEMU<span class="lvl b">basics</span></h4><p class="x" data-i18n="t0429"><span class="mono">qemu-user</span> runs one Linux ELF and translates its syscalls to your host: fast, but no real filesystem, NVRAM, or sibling processes. <span class="mono">qemu-system</span> boots a whole kernel and rootfs, giving you the real environment (nvram, the web server plus its backend) at the cost of speed and a working kernel/DTB. Rule of thumb: user-mode a single reachable binary when the bug lives inside it, go full-system when the vulnerable code depends on device state set up elsewhere.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0430">FirmAE and Greenhouse for Linux gear<span class="lvl i">router/IoT</span></h4><p class="x" data-i18n="t0431">Firmadyne (2016) could only boot about 16% of images. <b>FirmAE</b> (ACSAC 2020) adds arbitration heuristics (patching boot, network, NVRAM, kernel) and pushes that to ~79% over 1,124 images, and found 12 0-days across 23 devices. Full-system is heavy though, so <b>Greenhouse</b> (USENIX Security 2023) rehosts just <i>one</i> service in user space, auto-rewriting the binary to stub out <span class="mono">nvram_get</span>, missing files, and ioctls, then wires it to AFL++. For a bug in one web binary, that's usually all you need.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0432">The MCU peripheral problem<span class="lvl i">bare-metal</span></h4><p class="x" data-i18n="t0433">On Cortex-M there's no OS: firmware pokes memory-mapped I/O directly, so a QEMU that returns 0 for a UART status register leaves it busy-waiting forever. Three answers: <b>HALucinator</b> (2020) matches vendor HAL functions and swaps in Python handlers so the hardware "disappears"; <b>P2IM</b> infers register roles from access patterns; and <b>Fuzzware</b> (USENIX 2022) treats each unknown MMIO read as fuzz input and uses local symbolic execution to model which bits actually matter, so the fuzzer stops wasting energy on don't-care bits.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0434">Then bolt on a fuzzer<span class="lvl i">throughput</span></h4><p class="x" data-i18n="t0435">Once it runs, point <b>AFL++</b> at it (qemu_mode, unicorn_mode, CmpLog, persistent mode). <b>FirmAFL</b> pioneered the full-system-plus-user hybrid for Linux IoT. And the throughput race is real: <b>SAFIREFUZZ</b> (USENIX 2023) runs Cortex-M firmware <i>natively</i> on an ARM host via high-level emulation and binary rewriting, reporting over 600x the throughput of HALucinator. On the exotic end, <b>FirmWire</b> (NDSS 2022) full-system-emulates Samsung and MediaTek baseband and fuzzes the cellular stack, a target that used to be basically un-fuzzable.</p></div><div class="chunk"><h4 class="x" data-i18n="t0619">It boots, but the web server won't<span class="lvl i">half-boot</span></h4><p class="x" data-i18n="t0620">The common half-win: FirmAE boots the kernel and userland but the web UI never answers. Debug it in <span class="mono">./scratch/&lt;iid&gt;/</span>, where FirmAE drops the serial log and its network guess: read the serial log for how far init got, and ping the IP it prints. If it's up but port 80 is dead, the httpd started before its config existed, common when <span class="mono">nvram_get</span> returns nothing or a mount is missing. Re-run in debug mode (<span class="mono">./run.sh -d</span>) to get a console, then inside check <span class="mono">ps</span>, <span class="mono">netstat -tlnp</span>, and start the httpd by hand to watch it fail. Half the time it's one missing nvram default or a hardcoded path to a partition that didn't mount.</p></div>
+    </div>
+    <figure class="dg" data-id="fuzzloop">
+      <svg viewBox="0 0 640 210" role="img" aria-label="Rehost then fuzz: firmware under emulation, a coverage-guided fuzzer mutates inputs, runs them, watches coverage, saves crashes">
+        <rect x="20" y="80" width="120" height="50" rx="8" class="chipfill soft" stroke-width="1.3"/><text x="80" y="102" text-anchor="middle" font-size="11">firmware</text><text x="80" y="118" text-anchor="middle" font-size="10" class="lbl">rootfs / MCU</text>
+        <line x1="140" y1="105" x2="176" y2="105" class="soft" stroke-width="1.5" marker-end="url(#ar-soft)"/>
+        <rect x="178" y="70" width="150" height="70" rx="8" class="softbox" stroke-width="1.3"/><text x="253" y="96" text-anchor="middle" font-size="11">rehost engine</text><text x="253" y="113" text-anchor="middle" font-size="9.5" class="lbl">QEMU · Fuzzware</text><text x="253" y="127" text-anchor="middle" font-size="9.5" class="lbl">FirmAE · Greenhouse</text>
+        <rect x="380" y="55" width="230" height="110" rx="9" class="softbox" stroke-width="1.3"/><text x="495" y="47" text-anchor="middle" class="lbl" font-size="11">coverage-guided fuzzer (AFL++)</text>
+        <rect x="398" y="70" width="90" height="26" rx="5" class="chipfill soft"/><text x="443" y="87" text-anchor="middle" font-size="10">mutate</text>
+        <rect x="505" y="70" width="90" height="26" rx="5" class="chipfill soft"/><text x="550" y="87" text-anchor="middle" font-size="10">run in emu</text>
+        <rect x="505" y="120" width="90" height="26" rx="5" class="chipfill soft"/><text x="550" y="137" text-anchor="middle" font-size="10">coverage++</text>
+        <rect x="398" y="120" width="90" height="26" rx="5" class="accwash"/><text x="443" y="137" text-anchor="middle" font-size="10" class="danf">crash → triage</text>
+        <line x1="488" y1="83" x2="505" y2="83" class="soft" stroke-width="1.3" marker-end="url(#ar-soft)"/><line x1="550" y1="96" x2="550" y2="120" class="soft" stroke-width="1.3" marker-end="url(#ar-soft)"/><line x1="505" y1="133" x2="488" y2="133" class="soft" stroke-width="1.3" marker-end="url(#ar-soft)"/>
+        <path d="M443 120 C 443 104, 443 100, 443 96" class="soft" fill="none" stroke-width="1.3" marker-end="url(#ar-soft)"/>
+        <line x1="328" y1="105" x2="378" y2="105" class="acc" stroke-width="1.6" marker-end="url(#ar-acc)"/>
+      </svg>
+      <figcaption class="x" data-i18n="t0436">Under emulation, a coverage-guided fuzzer throws millions of inputs and keeps the ones reaching new code, saving crashes to triage. No physical device in the loop, so it scales.</figcaption>
+    </figure>
+  </div>
+  
+  <div class="term">
+    <div class="term-top"><span class="led a"></span><span class="led"></span><span class="led"></span><span class="ttl">firmae: rehost a router image</span><button class="copy">copy</button></div>
+<pre><code><span class="c"># one-time setup, then run a single image (needs sudo: it makes a tap iface)</span>
+sudo ./download.sh &amp;&amp; sudo ./install.sh
+sudo ./run.sh -r netgear firmware.bin    <span class="c"># modes: -c check  -a analyze  -r run  -d debug</span>
+<span class="c"># FirmAE prints the guessed IP; results + logs land in ./scratch/&lt;iid&gt;/</span>
+ping 192.168.0.1                          <span class="c"># reachable? then browse / Burp the web UI</span>
+<span class="c"># didn't boot? read the serial log in ./scratch/&lt;iid&gt;/, or re-run with -d for a console</span></code></pre>
+  </div>
+  <div class="term" style="margin-top:16px">
+    <div class="term-top"><span class="led a"></span><span class="led"></span><span class="led"></span><span class="ttl">afl++: fuzz a rehosted binary</span><button class="copy">copy</button></div>
+<pre><code><span class="c"># black-box: no source, fuzz the binary under QEMU mode</span>
+afl-fuzz -Q -i seeds/ -o out/ -- ./httpd @@      <span class="c"># @@ = the input file</span>
+
+<span class="c"># faster: a persistent harness around the request parser you reversed,</span>
+<span class="c"># built with afl-clang-fast (source, or a rewritten stub):</span>
+#include &lt;stdint.h&gt;
+__AFL_FUZZ_INIT();
+int main(void) {
+    unsigned char *buf = __AFL_FUZZ_TESTCASE_BUF;   <span class="c"># AFL's shared input buffer</span>
+    while (__AFL_LOOP(10000)) {                      <span class="c"># N runs per fork = huge speedup</span>
+        int len = __AFL_FUZZ_TESTCASE_LEN;
+        handle_request(buf, len);                    <span class="c"># the function you found as the parser</span>
+    }
+    return 0;
+}</code></pre>
+  </div>
+  <div class="exs two">
+    <div class="ex"><span class="exn x" data-i18n="t0437">Fuzzware</span><p class="x" data-i18n="t0438">Self-configuring Cortex-M rehosting via automatic MMIO access models (Unicorn + AFL++). The current baseline for automated bare-metal fuzzing.</p><span class="ref">Scharnowski et al., USENIX 2022</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0439">Greenhouse</span><p class="x" data-i18n="t0440">Single-service user-space rehosting via automated binary rewriting, scaled on Kubernetes to rehost and fuzz large firmware corpora.</p><span class="ref">Tay et al., USENIX 2023</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0441">SAFIREFUZZ</span><p class="x" data-i18n="t0442">Runs Cortex-M firmware as a native Linux userspace process via dynamic binary rewriting. About 600x the throughput of HALucinator.</p><span class="ref">Seidel/Maier/Muench, USENIX 2023</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0443">FirmWire</span><p class="x" data-i18n="t0444">Full-system baseband emulation for Samsung and MediaTek modems, fuzzing the protocol stack and finding over-the-air memory corruption.</p><span class="ref">Hernandez et al., NDSS 2022</span></div>
+  </div>
+  <div class="refs"><div class="rh">tools &amp; refs</div><ul>
+    <li><a href="https://github.com/pr0v3rbs/FirmAE">FirmAE</a></li>
+    <li><a href="https://github.com/sefcom/greenhouse">Greenhouse</a></li>
+    <li><a href="https://github.com/fuzzware-fuzzer/fuzzware">Fuzzware</a></li>
+    <li><a href="https://github.com/pr0me/SAFIREFUZZ">SAFIREFUZZ</a></li>
+    <li><a href="https://github.com/FirmWire/FirmWire">FirmWire</a></li>
+    <li><a href="https://github.com/AFLplusplus/AFLplusplus">AFL++</a></li>
+  </ul></div>
+
+  <div class="tshoot fm">
+    <div class="tsh-h"><span class="fmtag">field manual</span> <span class="x" data-i18n="t0585">When it goes wrong</span></div>
+    <ul class="trios">
+    <li class="trio x" data-i18n="t0586"><b class="sy">Router emulation won't boot.</b> <span class="cau"><b>Cause:</b> Firmadyne fails on most images (network, NVRAM, kernel fixups missing).</span> <b>Play:</b> use FirmAE, whose arbitration heuristics boot ~79%; or skip full-system entirely and rehost just the vulnerable service with Greenhouse, then fuzz it.</li>
+    <li class="trio x" data-i18n="t0587"><b class="sy">MCU firmware hangs forever in QEMU.</b> <span class="cau"><b>Cause:</b> a peripheral status register reads 0, so the firmware busy-waits.</span> <b>Play:</b> model the MMIO: Fuzzware builds access models automatically, HALucinator matches the vendor HAL and stubs it. Then a fuzzer can actually make progress.</li>
+    <li class="trio x" data-i18n="t0621"><b class="sy">It emulates, but the web server never answers.</b> <span class="cau"><b>Cause:</b> a half-boot: the httpd starts before its config, an nvram default is missing, or a partition didn't mount.</span> <b>Play:</b> read the serial log in <span class="mono">./scratch/&lt;iid&gt;/</span> and ping the guessed IP; re-run with <span class="mono">./run.sh -d</span>, then <span class="mono">netstat -tlnp</span> inside and start the httpd by hand to watch it fail.</li>
+    </ul>
+  </div>
+  <div class="dtree fm"><div class="dh"><span class="fmtag">field manual</span> Decision: user-mode or full-system emulation?</div>
+  <div class="flow x" data-i18n="t0588">Bug lives in one self-contained binary (a CGI/daemon)? &nbsp;→&nbsp; <span class="go">qemu-user</span> that binary, fastest.<br>Needs nvram, /proc, IPC, or the web server + its backend? &nbsp;→&nbsp; <span class="go">full-system</span> (FirmAE).<br>Full-system won't boot? &nbsp;→&nbsp; rehost just the service with <b>Greenhouse</b> and fuzz that.</div></div>
+</section>
+
+<!-- 14 radare2 -->
+<section class="topic reveal" id="analyze">
+  <div class="thead"><span class="tno">14</span><h3 class="tt x" data-i18n="t0445">Reverse engineering with radare2</h3></div>
+  <p class="tlede x" data-i18n="t0446">radare2 shines on firmware because it assumes nothing: it'll open a raw headerless MIPS/ARM blob, take the arch and base address on the command line, analyze it, and emulate one function with ESIL, all without the hardware. The durable workflow is sink-to-source, and the modern r2 (5.9.x through 6.x) pulls in real decompilers on demand.</p>
+  <div class="tgrid split">
+    <div class="chunks">
+      <div class="chunk"><h4 class="x" data-i18n="t0447">Load a raw blob correctly<span class="lvl b">basics</span></h4><p class="x" data-i18n="t0448">The single most important firmware skill. After a carve, tell r2 everything: <span class="mono">r2 -a mips -b 32 -e cfg.bigendian=true -m 0x80000000 boot.bin</span>. Set arch, word size, endianness (big-endian MIPS is the classic router gotcha), and the map/base address so absolute pointers resolve. Guess the arch wrong and analysis is garbage, so sanity-check that strings, prologues, and xrefs line up. Install with the git <span class="mono">sys/install.sh</span>, not distro packages (they lag).</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0449">Analysis passes and the five levers<span class="lvl b">navigation</span></h4><p class="x" data-i18n="t0450">r2 doesn't over-analyze by default. <span class="mono">aaa</span> is the usual pass (or run <span class="mono">aac</span>/<span class="mono">aae</span>/<span class="mono">aar</span> individually). Then <span class="mono">afl~name</span> lists functions, <span class="mono">axt sym.imp.system</span> shows who calls a sink (the backbone of sink-to-source), <span class="mono">pdf @ sym.foo</span> disassembles one, <span class="mono">izz~keyword</span> finds strings (use <span class="mono">izz</span>, not <span class="mono">iz</span>, on raw blobs), and <span class="mono">VV</span> opens the control-flow graph.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0451">ESIL, r2pipe, and diffing<span class="lvl i">level up</span></h4><p class="x" data-i18n="t0452">When a value is computed, ESIL emulates a function offline to resolve it (<span class="mono">aei; aeim; aeip; aes</span>, with <span class="mono">e io.cache=true</span>), which is how you unpack an obfuscated config string or model a checksum. <b>r2pipe</b> scripts the whole hunt from Python: every command returns JSON via <span class="mono">cmdj()</span>, so you list every caller of every sink across a whole extracted filesystem. And <span class="mono">radiff2 -A -C old new</span> diffs at the function level to reverse a patch or spot a backdoor between two firmware revisions.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0453">Decompilers and the honest ecosystem<span class="lvl i">tooling</span></h4><p class="x" data-i18n="t0454">Pull decompilers on demand: <span class="mono">r2pm -Uci r2ghidra</span> gives you <span class="mono">pdg</span> (Ghidra's actual decompiler as a plugin, great on MIPS/ARM), <span class="mono">r2dec</span> gives <span class="mono">pdd</span>. Around r2 sit Rizin and its Cutter GUI, Ghidra's headless <span class="mono">analyzeHeadless</span> to batch-decompile a whole tree, and Binary Ninja. New in 2024/2025: <b>r2ai</b> and <b>decai</b> add LLM-assisted decompilation and vuln-hinting inside r2. Treat that output as a hypothesis, not truth.</p></div>
+    </div>
+    <div class="term" style="margin-top:0">
+      <div class="term-top"><span class="led a"></span><span class="led"></span><span class="led"></span><span class="ttl">r2: raw blob to sink</span><button class="copy">copy</button></div>
+<pre><code><span class="c"># raw MIPS-BE blob mapped at 0x80000000</span>
+r2 -a mips -b 32 -e cfg.bigendian=true -m 0x80000000 kernel.bin
+aaa
+axt sym.imp.system        <span class="c"># every system(): which function, is the arg a request field?</span>
+s sym.imp.strcpy ; axt    <span class="c"># same for the overflow sinks</span>
+r2pm -Uci r2ghidra ; pdg  <span class="c"># decompile the suspect function</span>
+<span class="c"># reverse a "fixed" build against production:</span>
+radiff2 -A -C prod.bin beta.bin</code></pre>
+    </div>
+  </div>
+  <div class="exs two">
+    <div class="ex"><span class="exn x" data-i18n="t0455">TP-Link Archer AX21, in r2 terms</span><p class="x" data-i18n="t0456">CVE-2023-1389: the <span class="mono">country</span> parameter reaches a <span class="mono">popen()</span> as root. Textbook sink-to-source: find the sink, walk <span class="mono">axt</span> back to the request field, confirm no sanitizer.</p><span class="ref">Tenable TRA-2023-11</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0457">r2ai / decai</span><p class="x" data-i18n="t0458">radare's 2024/2025 LLM plugins bring decompilation, function explanation, and vuln-hinting into r2 via r2pm, backed by OpenAI/Anthropic/Ollama/local models.</p><span class="ref">github.com/radareorg/r2ai</span></div>
+  </div>
+  <div class="refs"><div class="rh">tools &amp; refs</div><ul>
+    <li><a href="https://book.rada.re/">The Official Radare2 Book</a></li>
+    <li><a href="https://github.com/radareorg/r2ghidra">r2ghidra (pdg)</a></li>
+    <li><a href="https://github.com/radareorg/r2ai">r2ai / decai</a></li>
+    <li><a href="https://book.rada.re/tools/radiff2/binary_diffing.html">radiff2 diffing</a></li>
+    <li><a href="https://rizin.re/">Rizin / Cutter</a></li>
+  </ul></div>
+
+  <div class="tshoot fm">
+    <div class="tsh-h"><span class="fmtag">field manual</span> <span class="x" data-i18n="t0589">When it goes wrong</span></div>
+    <ul class="trios">
+    <li class="trio x" data-i18n="t0590"><b class="sy">radare2 disassembly is garbage.</b> <span class="cau"><b>Cause:</b> wrong arch, word size, endianness, or base address.</span> <b>Play:</b> set them explicitly (<span class="mono">-a mips -b 32 -e cfg.bigendian=true -m &lt;base&gt;</span>); big-endian MIPS is the classic router gotcha. Sanity-check that strings, function prologues, and xrefs resolve.</li>
+    <li class="trio x" data-i18n="t0591"><b class="sy">Can't find where a web parameter is handled.</b> <span class="cau"><b>Cause:</b> the handler is buried in a stripped border binary.</span> <b>Play:</b> use SaTC's shared-keyword trick: grep the parameter name in <span class="mono">/www</span>, find the same hardcoded string in the border binary, then follow taint from that reference to the sink.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 15 bug hunting / taint -->
+<section class="topic reveal" id="hunt">
+  <div class="thead"><span class="tno">15</span><h3 class="tt x" data-i18n="t0459">Automated bug hunting: taint &amp; real CVEs</h3></div>
+  <p class="tlede x" data-i18n="t0460">A vulnerability is a data-flow fact: attacker input (a source) reaches a dangerous operation (a sink) without sanitization. On embedded Linux that's an HTTP param or NVRAM value flowing into <span class="mono">system()</span> (command injection) or into <span class="mono">strcpy()</span> with no bounds (overflow). Bug hunting is finding that tainted path, and the modern tools automate exactly this.</p>
+  <div class="tgrid split">
+    <div class="chunks">
+      <div class="chunk"><h4 class="x" data-i18n="t0461">Start at the border binary<span class="lvl b">basics</span></h4><p class="x" data-i18n="t0462">The process bound to the network (the httpd or a CGI handler) is where attacker input enters, so that's where you start. Grep the sinks and walk backward. Sinks: <span class="mono">system/popen/execve</span> and vendor wrappers like <span class="mono">doSystem</span>/<span class="mono">CsteSystem</span> (red flags, they wrap <span class="mono">system()</span> with device data), plus <span class="mono">strcpy/strcat/sprintf/memcpy</span>. Sources: <span class="mono">websGetVar</span>, <span class="mono">recv</span>, and config reads <span class="mono">nvram_get</span>/<span class="mono">nvram_safe_get</span>. The question is always: does an argument trace back to a source with no sanitizer in between?</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0463">SaTC: shared keywords bridge front-end to binary<span class="lvl i">taint</span></h4><p class="x" data-i18n="t0464"><b>SaTC</b> (USENIX Security 2021) noticed the same input name shows up in both the web front-end (an HTML/JS string like <span class="mono">"ping_addr"</span>) and the back-end binary as a hardcoded string used to fetch that param. It pulls those shared keywords from <span class="mono">/www</span>, finds their references in the border binary with Ghidra headless, and runs directed taint (<span class="mono">ref2sink_cmdi</span>, <span class="mono">ref2sink_bof</span>). That found 33 previously-unknown bugs, mostly command injection, including the D-Link DIR-878.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0465">KARONTE and EmTaint: the hard cases<span class="lvl i">taint</span></h4><p class="x" data-i18n="t0466">Real firmware splits a request across processes: httpd writes a value into NVRAM, a second binary reads it and calls <span class="mono">system()</span>. Single-binary taint misses that. <b>KARONTE</b> (IEEE S&amp;P 2020) models the multi-binary data flow across NVRAM/env/file/socket IPC. <b>EmTaint</b> (ISSTA 2023) tackles the aliasing problem on stripped MIPS/ARM with on-demand alias analysis, fast enough to run whole images. Ahead of any of these, <b>cwe_checker</b> is a cheap first pass, and <b>angr</b> proves reachability and solves for the triggering bytes.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0467">From a hit to a confirmed finding<span class="lvl i">triage</span></h4><p class="x" data-i18n="t0468">A static path is a hypothesis. Confirm four things: is the handler reachable <b>pre-authentication</b> (those are the valuable ones)? does the code strip <span class="mono">;|&amp;`$()</span> or use an allowlist between source and sink? can you reproduce it by rehosting the border binary and sending the request? and does a version diff show the vendor silently patched it? Only a path that's reachable, unsanitized, and controllable is a real bug.</p></div>
+    </div>
+    <figure class="dg" data-id="taint">
+      <svg viewBox="0 0 640 220" role="img" aria-label="Shared-keyword taint: a parameter name in a front-end file also appears in the binary, marking where attacker input enters and flows to a command-exec sink">
+        <rect x="20" y="55" width="180" height="90" rx="9" class="chipfill soft" stroke-width="1.3"/><text x="110" y="46" text-anchor="middle" class="lbl" font-size="11">front-end (www/*.html, js)</text>
+        <text x="35" y="86" font-size="12">form field</text><text x="35" y="108" font-size="12.5" class="accf">"ping_addr"</text><text x="35" y="130" font-size="11" class="lbl">→ /cgi?ping_addr=…</text>
+        <line x1="200" y1="100" x2="300" y2="100" class="acc" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#ar-acc)"/><text x="250" y="90" text-anchor="middle" class="accf" font-size="10">shared keyword</text>
+        <rect x="300" y="40" width="320" height="150" rx="9" class="softbox" stroke-width="1.3"/><text x="460" y="32" text-anchor="middle" class="lbl" font-size="11">httpd binary</text>
+        <rect x="320" y="60" width="130" height="34" rx="6" class="chipfill soft"/><text x="385" y="82" text-anchor="middle" font-size="11">"ping_addr" ref</text>
+        <rect x="320" y="110" width="130" height="34" rx="6" class="chipfill soft"/><text x="385" y="132" text-anchor="middle" font-size="11">nvram_get / param</text>
+        <rect x="470" y="110" width="130" height="34" rx="6" class="accwash soft"/><text x="535" y="128" text-anchor="middle" font-size="10.5" class="danf">system("ping %s")</text><text x="535" y="140" text-anchor="middle" font-size="9" class="lbl">SINK</text>
+        <line x1="385" y1="94" x2="385" y2="110" class="soft" stroke-width="1.4" marker-end="url(#ar-soft)"/><line x1="450" y1="127" x2="470" y2="127" class="dan" stroke-width="1.8" marker-end="url(#ar-dan)"/>
+        <text x="535" y="170" text-anchor="middle" class="danf" font-size="10.5">unsanitized → command injection</text>
+      </svg>
+      <figcaption class="x" data-i18n="t0469">The parameter name a form posts also sits as a string in the binary. SaTC uses that shared keyword to pin exactly where input enters, then follows it to a <span class="mono">system()</span> sink. That's how static bug-hunting scales.</figcaption>
+    </figure>
+  </div>
+  <div class="exs two">
+    <div class="ex"><span class="exn x" data-i18n="t0470">Zyxel firewalls, unauth RCE</span><p class="x" data-i18n="t0471">CVE-2023-28771: unauthenticated OS command injection reachable with a crafted IKE packet to UDP/500 on the firewall's IKE daemon. CVSS 9.8, added to CISA KEV, mass-exploited by botnets.</p><span class="ref">Rapid7 · CVE-2023-28771</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0472">D-Link NAS, injection + backdoor</span><p class="x" data-i18n="t0473">CVE-2024-3273: command injection in <span class="mono">nas_sharing.cgi</span>'s <span class="mono">system</span> parameter, chained with a hardcoded backdoor account (CVE-2024-3272), across end-of-life DNS-320L/325/327L/340L.</p><span class="ref">NVD · CVE-2024-3273/3272</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0474">Pwn2Own Toronto 2023</span><p class="x" data-i18n="t0475">Consumer IoT contest that fell to these same source-to-sink chains: WD and QNAP NAS, the Synology BC500 camera, Canon and Lexmark printers, and a Sonos Era 100.</p><span class="ref">ZDI, Oct 2023</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0476">SaTC toolkit</span><p class="x" data-i18n="t0477">Open source (NSSL-SJTU/SaTC): shared-keyword taint with <span class="mono">ref2sink_cmdi</span>/<span class="mono">ref2sink_bof</span> scripts you can run on your own extracted rootfs.</p><span class="ref">github.com/NSSL-SJTU/SaTC</span></div>
+  </div>
+  <div class="refs"><div class="rh">tools &amp; refs</div><ul>
+    <li><a href="https://github.com/NSSL-SJTU/SaTC">SaTC</a></li>
+    <li><a href="https://github.com/ucsb-seclab/karonte">KARONTE</a></li>
+    <li><a href="https://github.com/angr/angr">angr</a></li>
+    <li><a href="https://www.zerodayinitiative.com/advisories/ZDI-23-451/">ZDI-23-451 (Archer AX21)</a></li>
+    <li><a href="https://www.zerodayinitiative.com/blog/2023/10/24/pwn2own-toronto-2023-day-one-results">Pwn2Own Toronto 2023</a></li>
+  </ul></div>
+
+  <div class="tshoot fm">
+    <div class="tsh-h"><span class="fmtag">field manual</span> <span class="x" data-i18n="t0592">When it goes wrong</span></div>
+    <ul class="trios">
+    <li class="trio x" data-i18n="t0593"><b class="sy">Found a <span class="mono">system()</span>/<span class="mono">popen()</span>, is it actually a bug?</b> <span class="cau"><b>Cause:</b> the sink is only a bug if attacker input reaches it unsanitized.</span> <b>Play:</b> walk <span class="mono">axt</span> back to the source, check the argument is attacker-controlled, that nothing strips <span class="mono">;|&amp;`$()</span> in between, and that the handler is reachable pre-auth. Vendor wrappers like <span class="mono">doSystem</span>/<span class="mono">CsteSystem</span> are red flags.</li>
+    <li class="trio x" data-i18n="t0594"><b class="sy">httpd writes an NVRAM value, a different binary reads it and calls <span class="mono">system()</span>.</b> <span class="cau"><b>Cause:</b> single-binary taint stops at the write and misses the flow.</span> <b>Play:</b> use a multi-binary tool (KARONTE, EmTaint) that models NVRAM/env/file IPC so taint carries from the setter binary to the getter.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 16 secure boot / bootkits -->
+<section class="topic reveal" id="boot">
+  <div class="thead"><span class="tno">16</span><h3 class="tt x" data-i18n="t0478">Secure boot, bootkits &amp; supply chain</h3><span class="chip-new">modern</span></div>
+  <p class="tlede x" data-i18n="t0479">Secure boot is a chain of cryptographic gates, each stage verifying the next, rooted in a key fused or provisioned into the platform. The 2022 to 2025 run of research shattered the idea that this chain is unbreakable in practice. This is background for defenders and researchers, not a recipe for attacking gear you don't own.</p>
+  <div class="tgrid split">
+    <div class="chunks">
+      <div class="chunk"><h4 class="x" data-i18n="t0480">The UEFI chain: PK, KEK, db, dbx<span class="lvl b">basics</span></h4><p class="x" data-i18n="t0481">UEFI Secure Boot is a signature policy in NVRAM. The Platform Key (PK) is the root that authorizes changes to the Key Exchange Keys (KEK), which authorize updates to <span class="mono">db</span> (allowed signers) and <span class="mono">dbx</span> (the revocation list). Firmware only runs a bootloader whose signature chains to <span class="mono">db</span> and isn't in <span class="mono">dbx</span>. On Linux, distros ship <b>shim</b> (signed by Microsoft's CA) which then trusts the distro cert plus your Machine Owner Keys (MOK). Audit MOK with <span class="mono">mokutil --list-enrolled</span>, because that's exactly what bootkits abuse.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0482">Secure boot vs measured boot<span class="lvl i">enforce vs attest</span></h4><p class="x" data-i18n="t0483">Secure boot <b>enforces</b>: a bad signature halts the boot. Measured boot <b>records</b>: each stage hashes the next into a TPM PCR plus an event log, then a remote verifier decides via attestation. Measured boot doesn't stop a bootkit, it makes the change detectable after the fact, and sealing disk keys to PCRs (LUKS+TPM, BitLocker) ties data access to an unmodified chain. Read PCRs with <span class="mono">tpm2_pcrread</span>.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0484">How the chain actually broke, 2023 to 2025<span class="lvl i">bypass classes</span></h4><p class="x" data-i18n="t0485"><b>BlackLotus</b> (2023) was the first in-the-wild UEFI Secure Boot bypass, using "baton drop" (CVE-2022-21894) to strip the in-memory policy and bringing its own signed-but-vulnerable binaries. <b>Bootkitty</b> (Nov 2024) was the first UEFI bootkit aimed at Linux (a research PoC). <b>LogoFAIL</b> (2023) turned the boot-logo image parser into code execution during DXE, no signed executable touched. The pattern: an unsigned data file, a leaked binary, or a parser bug beats the crypto.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0486">When the root of trust is fake<span class="lvl i">supply chain</span></h4><p class="x" data-i18n="t0487"><b>PKfail</b> (Binarly, 2024) found that on 800+ device models the Platform Key was an AMI <i>test</i> key whose certificate literally says "DO NOT TRUST", with some private halves leaked publicly, so anyone could sign a trusted update. The 2023 MSI breach similarly leaked Intel Boot Guard OEM keys. Crypto boot security is only as good as key management across a long OEM/ODM chain. On embedded ARM the same ideas appear as U-Boot FIT verified boot, Android AVB, and TF-A's TBBR anchored to a ROTPK hash in fuses, and they fail the same way when a key leaks, fuses aren't blown in production, or rollback protection is missing.</p></div>
+    </div>
+    <figure class="dg" data-id="secureboot">
+      <svg viewBox="0 0 640 210" role="img" aria-label="Chain of trust: boot ROM verifies bootloader, which verifies kernel, which verifies rootfs; a broken link breaks the chain">
+        <rect x="20" y="70" width="120" height="60" rx="8" class="softbox" stroke-width="1.4"/><text x="80" y="96" text-anchor="middle" font-size="12" class="accf">Boot ROM / PK</text><text x="80" y="114" text-anchor="middle" font-size="10.5" class="lbl">key in OTP/fuse</text>
+        <rect x="190" y="70" width="120" height="60" rx="8" class="chipfill soft" stroke-width="1.3"/><text x="250" y="96" text-anchor="middle" font-size="12">Bootloader</text><text x="250" y="114" text-anchor="middle" font-size="10.5" class="lbl">signed</text>
+        <rect x="360" y="70" width="120" height="60" rx="8" class="chipfill soft" stroke-width="1.3"/><text x="420" y="96" text-anchor="middle" font-size="12">Kernel</text><text x="420" y="114" text-anchor="middle" font-size="10.5" class="lbl">signed</text>
+        <rect x="530" y="70" width="90" height="60" rx="8" class="chipfill soft" stroke-width="1.3"/><text x="575" y="96" text-anchor="middle" font-size="12">rootfs</text><text x="575" y="114" text-anchor="middle" font-size="10.5" class="lbl">dm-verity</text>
+        <line x1="140" y1="100" x2="188" y2="100" class="acc" stroke-width="2" marker-end="url(#ar-acc)"/><line x1="310" y1="100" x2="358" y2="100" class="acc" stroke-width="2" marker-end="url(#ar-acc)"/><line x1="480" y1="100" x2="528" y2="100" class="acc" stroke-width="2" marker-end="url(#ar-acc)"/>
+        <text x="164" y="90" text-anchor="middle" class="accf" font-size="10">verifies</text><text x="334" y="90" text-anchor="middle" class="accf" font-size="10">verifies</text><text x="504" y="90" text-anchor="middle" class="accf" font-size="10">verifies</text>
+        <text x="334" y="150" text-anchor="middle" class="danf" font-size="11">break one link → whole chain falls</text>
+        <path d="M320 128 L 348 156" class="dan" stroke-width="2"/><path d="M348 128 L 320 156" class="dan" stroke-width="2"/>
+        <text x="80" y="150" text-anchor="middle" class="lbl" font-size="10">immutable root</text>
+      </svg>
+      <figcaption class="x" data-i18n="t0488">Each stage verifies the next, anchored to a key in silicon. Attacks hit the weakest link: an unsigned data file (LogoFAIL), a leaked key (PKfail), a signed-but-vulnerable binary (BlackLotus), or a glitch on the check.</figcaption>
+    </figure>
+  </div>
+  <div class="exs two">
+    <div class="ex"><span class="exn x" data-i18n="t0489">BlackLotus</span><p class="x" data-i18n="t0490">First in-the-wild UEFI Secure Boot bypass bootkit. Strips the in-memory policy via BCD <span class="mono">truncatememory</span> (CVE-2022-21894) and enrolls its own MOK cert. Microsoft's fix (KB5025885) staged dbx revocations because auto-revoking risks bricking.</p><span class="ref">ESET, Mar 2023</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0491">LogoFAIL</span><p class="x" data-i18n="t0492">Memory corruption in UEFI boot-logo image parsers across Insyde, AMI, and Phoenix. An unsigned logo runs code during DXE, bypassing Secure Boot without touching a signed executable.</p><span class="ref">Binarly, Dec 2023 · CVE-2023-40238</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0493">PKfail</span><p class="x" data-i18n="t0494">800+ models shipped with an AMI test Platform Key marked "DO NOT TRUST", some private keys public. The root of trust itself was forgeable. Check yours at pk.fail.</p><span class="ref">Binarly, Jul 2024</span></div>
+    <div class="ex"><span class="exn x" data-i18n="t0495">BootHole, the origin case</span><p class="x" data-i18n="t0496">CVE-2020-10713: a buffer overflow parsing the <i>unsigned</i> <span class="mono">grub.cfg</span> text file runs code with a Secure Boot bypass. The template for "config/data in the trusted path is attack surface".</p><span class="ref">Eclypsium, 2020</span></div>
+  </div>
+  <div class="refs"><div class="rh">refs</div><ul>
+    <li><a href="https://www.welivesecurity.com/2023/03/01/blacklotus-uefi-bootkit-myth-confirmed/">BlackLotus (ESET)</a></li>
+    <li><a href="https://www.binarly.io/blog/finding-logofail-the-dangers-of-image-parsing-during-system-boot">LogoFAIL (Binarly)</a></li>
+    <li><a href="https://www.binarly.io/blog/pkfail-untrusted-platform-keys-undermine-secure-boot-on-uefi-ecosystem">PKfail (Binarly)</a></li>
+    <li><a href="https://trustedfirmware-a.readthedocs.io/en/latest/design/trusted-board-boot.html">TF-A Trusted Board Boot</a></li>
+    <li><a href="https://github.com/chipsec/chipsec">CHIPSEC</a></li>
+  </ul></div>
+</section>
+
+<!-- 17 dynamic / methodology / disclosure -->
+<section class="topic reveal" id="prove">
+  <div class="thead"><span class="tno">17</span><h3 class="tt x" data-i18n="t0497">Dynamic analysis, methodology &amp; disclosure</h3></div>
+  <p class="tlede x" data-i18n="t0498">Everything past static filesystem review is dynamic: driving a live or emulated device, intercepting its management plane, and getting a debugger onto it. Run it against a methodology so it's repeatable, and finish with a report the vendor can actually act on.</p>
+  <div class="chunks">
+    <div class="chunk"><h4 class="x" data-i18n="t0499">OWASP FSTM as a checklist you run<span class="lvl b">basics</span></h4><p class="x" data-i18n="t0500">The Firmware Security Testing Methodology is nine ordered stages: recon, obtain firmware, analyze, extract the filesystem, analyze contents, emulate, dynamic analysis, runtime analysis, exploitation. Stages 1 to 5 are static; the point of 6 to 9 is that they force you off the disk onto a running target. Treat each stage as a gate with a concrete artifact (a booting emulator, an authenticated web session, a debugger attach), not a vibe.</p></div>
+    <div class="chunk"><h4 class="x" data-i18n="t0501">Intercept the management plane<span class="lvl i">where the bugs are</span></h4><p class="x" data-i18n="t0502">Proxy the web UI through Burp or mitmproxy and map every hidden CGI. On OpenWrt-derived gear the config plane is <span class="mono">ubus</span> (JSON-RPC) and <span class="mono">uci</span>: from a shell try <span class="mono">ubus list</span>, <span class="mono">ubus call system board</span>, and check ACLs in <span class="mono">/usr/share/rpcd/acl.d/</span>. Over HTTP, uhttpd's ubus plugin enforces login and ACL, so weak session handling is the bug. For telemetry, subscribe to the broker with <span class="mono">mosquitto_sub -t '#'</span> and probe CoAP on UDP/5683.</p></div>
+      <div class="chunk"><h4 class="x" data-i18n="t0503">The companion app is a shortcut<span class="lvl i">mobile</span></h4><p class="x" data-i18n="t0504">The app is often the fastest way to understand a proprietary protocol and cloud API. Decompile the APK with <span class="mono">jadx</span>, pull hardcoded endpoints and keys, and use <b>Frida</b> to hook TLS and crypto at runtime, bypassing cert pinning and dumping the plaintext BLE/HTTP/MQTT the device actually trusts. Then replay that straight against the device or its API to test authorization boundaries.</p></div>
+    <div class="chunk"><h4 class="x" data-i18n="t0505">Get a debugger on it, then fuzz the protocol<span class="lvl i">runtime</span></h4><p class="x" data-i18n="t0506">With a shell, cross-compile a matching <span class="mono">gdbserver</span>, run <span class="mono">gdbserver :1234 --attach &lt;pid&gt;</span>, and connect with <span class="mono">gdb-multiarch</span> plus GEF or pwndbg. With no shell but exposed pads, bridge OpenOCD to gdb over JTAG. Once you know the protocol, fuzz it with <b>boofuzz</b> over TCP/UDP, paired with a liveness monitor so a hang counts as a fault. Match endianness exactly (mipsel vs mips).</p></div>
+    <div class="chunk"><h4 class="x" data-i18n="t0507">Scale it, then disclose it<span class="lvl i">the deliverable</span></h4><p class="x" data-i18n="t0508">For a portfolio, wire <b>EMBA</b> (and its team front-end EMBArk) into CI so every build is scanned and diffed; commercial platforms like <b>ONEKEY</b> do continuous binary-SBOM and CVE matching. Then close the loop: coordinated disclosure (CISA CVD, ISO 29147/30111), a CVE from the right CNA, and a report with the exact affected version and hash, the file and function, the CWE, a reproducible PoC, a CVSS vector, preconditions, impact, and remediation. Attach the SBOM and your emulation steps so the vendor reproduces it without your rig.</p></div>
+  </div>
+  <div class="minis two">
+    <div class="mini spec"><div class="mh">◆ <span class="x" data-i18n="t0509">the evidence gate</span></div><ul>
+      <li class="x" data-i18n="t0510"><b>Binary + function + address.</b> Point at it.</li>
+      <li class="x" data-i18n="t0511"><b>The reachable path</b>, source to sink, pre-auth or not.</li>
+      <li class="x" data-i18n="t0512"><b>The defect instruction</b>, quoted from the disassembly.</li>
+      <li class="x" data-i18n="t0513"><b>Attacker position + impact + a reproducible PoC.</b></li>
+    </ul></div>
+    <div class="mini miss"><div class="mh">◆ <span class="x" data-i18n="t0514">two retest traps</span></div><ul>
+      <li class="x" data-i18n="t0515"><b>Recompiled ≠ fixed.</b> Hash the vulnerable material (the key, the RSA <span class="mono">n</span>/<span class="mono">d</span>), not the ELF.</li>
+      <li class="x" data-i18n="t0516"><b>Retest against production, not the beta.</b> <span class="mono">radiff2</span> the two and anchor the report where users are.</li>
+    </ul></div>
+  </div>
+  <div class="callout tip"><div class="lab">◆ <span class="x" data-i18n="t0517">work the methodology, not vibes</span></div><p class="x" data-i18n="t0518">Three solid, reproducible findings beat twenty maybes, and a clean "checked, it's bounded" is worth writing down. Hunt like a second you is trying to kill every finding: the "secret" key turns out derivable, the "unbounded" copy is capped, the input isn't attacker controlled. Whatever survives that is real.</p></div>
+  <div class="refs"><div class="rh">tools &amp; refs</div><ul>
+    <li><a href="https://github.com/scriptingxss/owasp-fstm">OWASP FSTM</a></li>
+    <li><a href="https://github.com/e-m-b-a/embark">EMBArk</a></li>
+    <li><a href="https://frida.re/">Frida</a></li>
+    <li><a href="https://boofuzz.readthedocs.io/">boofuzz</a></li>
+    <li><a href="https://openwrt.org/docs/techref/ubus">OpenWrt ubus</a></li>
+    <li><a href="https://www.cve.org/ProgramOrganization/CNAs">CVE CNA program</a></li>
+  </ul></div>
+
+  <div class="tshoot fm">
+    <div class="tsh-h"><span class="fmtag">field manual</span> <span class="x" data-i18n="t0595">When it goes wrong</span></div>
+    <ul class="trios">
+    <li class="trio x" data-i18n="t0596"><b class="sy">Did the vendor actually fix it?</b> <span class="cau"><b>Cause:</b> a new build hash tells you nothing; recompiled is not fixed.</span> <b>Play:</b> <span class="mono">radiff2</span> the two builds to see which functions changed, and hash the vulnerable <b>material</b> (the key, the RSA <span class="mono">n</span>/<span class="mono">d</span>), not the ELF. Identical material means they only rebuilt. Test against production, not the beta.</li>
+    <li class="trio x" data-i18n="t0597"><b class="sy">Stuck reversing a proprietary device protocol.</b> <span class="cau"><b>Cause:</b> the wire format is opaque and maybe encrypted.</span> <b>Play:</b> the companion app is the shortcut: <span class="mono">jadx</span> the APK for hardcoded endpoints and keys, and use Frida to hook TLS/pinning and dump the plaintext BLE/HTTP/MQTT the device trusts, then replay it.</li>
+    </ul>
+  </div>
+</section>
+
+<div class="thread fm" id="case2"><div class="th-h"><span class="fmtag">field manual</span> <span class="x" data-i18n="t0598">Running case: same router, Part II</span></div>
+<p class="x" data-i18n="t0599">binwalk over-extracts into junk, so you switch to <b>unblob</b> and get a clean SquashFS. r2 opens the httpd but the disassembly is garbage until you set <b>big-endian MIPS</b>, then strings and prologues resolve. The SBOM flags an ancient <span class="mono">dropbear</span> and BusyBox, an n-day cleared for free. Then you grep a parameter name from <span class="mono">/www</span>, find the same string in the httpd, and <span class="mono">axt</span> walks it to a <span class="mono">doSystem()</span> with no sanitizer, reachable pre-auth. That is the bug, clip to CVE.</p></div>
+
+
+</div>
+
+<footer class="wrap">
+  <div class="legal x" data-i18n="t0312"><b>Play it straight.</b> Do this on hardware you own, or under an authorized program / coordinated-disclosure scope. Measure before you connect, back up before you write, and treat mains, lithium, and high-voltage glitch gear as hazards that can hurt <i>you</i>, not just the board. Pull secrets and report them — don't use them. Report to the vendor and hold details until they've had a fair window. The craft depends on staying the kind of researcher vendors keep talking to.</div>
+  <div class="sig">
+    <span class="x" data-i18n="t0313"><b>scope:</b> bench → dump → unpack → emulate → disassemble → hunt</span>
+    <span class="x" data-i18n="t0314"><b>method:</b> static-first · radare2 · web-researched · fact-checked</span>
+  </div>
+</footer>
+{% endraw %}

@@ -1,15 +1,18 @@
 {%- assign u = page.url -%}
-<header class="site-header">
-  <div class="wrap">
-    <div class="brand">
-      <a href="{{ '/' | relative_url }}">t1m3<span class="tld">.gatonet.club</span></a>
-    </div>
-    <nav class="mainnav" aria-label="principal">
-      <span class="prompt">$</span>
-      <a href="{{ '/' | relative_url }}"{% if u == '/' %} aria-current="page"{% endif %}><span class="b">[</span> home <span class="b">]</span></a>
-      <a href="{{ '/papers/' | relative_url }}"{% if u contains '/papers' %} aria-current="page"{% endif %}><span class="b">[</span> papers <span class="b">]</span></a>
-      <a href="{{ '/pgp/' | relative_url }}"{% if u contains '/pgp' %} aria-current="page"{% endif %}><span class="b">[</span> pgp <span class="b">]</span></a>
-      <a href="{{ '/about/' | relative_url }}"{% if u contains '/about' %} aria-current="page"{% endif %}><span class="b">[</span> about <span class="b">]</span></a>
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="{{ '/' | relative_url }}">
+      <span class="dot" aria-hidden="true"></span>t1m3<span class="tld">/gatonet.club</span>
+    </a>
+    <nav aria-label="principal">
+      <a href="{{ '/' | relative_url }}"{% if u == '/' %} aria-current="page"{% endif %}>home</a>
+      <a href="{{ '/papers/' | relative_url }}"{% if u contains '/papers' %} aria-current="page"{% endif %}>papers</a>
+      <a href="{{ '/pgp/' | relative_url }}"{% if u contains '/pgp' %} aria-current="page"{% endif %}>pgp</a>
+      <a href="{{ '/about/' | relative_url }}"{% if u contains '/about' %} aria-current="page"{% endif %}>about</a>
     </nav>
+    <span class="spacer"></span>
+    <button class="tgl" id="themeToggle" type="button" aria-label="alternar tema" title="alternar tema">
+      <span id="themeIcon">◑</span><b id="themeLabel">auto</b>
+    </button>
   </div>
 </header>

@@ -1,10 +1,15 @@
 <footer class="site-footer">
   <div class="wrap">
-    <span><span class="foot-prompt">$</span> t1m3 &mdash; hardware hacking notes</span>
-    <span>
-      <a href="{{ '/feed.xml' | relative_url }}">rss</a> ·
-      <a href="{{ '/pgp/' | relative_url }}">pgp</a> ·
-      <span>{{ 'now' | date: "%Y" }}</span>
-    </span>
+    <div class="legal">
+      Blog técnico pessoal. Todo o material foi obtido e analisado
+      <b>legalmente, em dispositivos próprios</b>, para fins de pesquisa e
+      educação. Vulnerabilidades passam por <b>disclosure coordenado</b> antes
+      de qualquer publicação.
+    </div>
+    <div class="sig">
+      <span><b>t1m3</b> — hardware · firmware · reverse engineering</span>
+      <span><a href="{{ '/pgp/' | relative_url }}">pgp</a> · <a href="{{ '/feed.xml' | relative_url }}">rss</a> · xmpp redstone@pwned.life</span>
+      <span>{{ 'now' | date: "%Y" }} · gatonet.club</span>
+    </div>
   </div>
 </footer>

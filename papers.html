@@ -3,9 +3,14 @@ layout: default
 title: papers
 permalink: /papers/
 ---
-<section class="home">
-  <div class="section-label">papers &mdash; {{ site.posts.size }} entradas</div>
-  <ol class="paperlist">
+<div class="wrap">
+  <header class="hero reveal" style="padding:44px 0 8px">
+    <div class="eyebrow">arquivo</div>
+    <h1 style="font-size:clamp(2rem,6vw,3rem)">papers<span class="tld"> · {{ site.posts.size }}</span></h1>
+    <p class="lede">Tudo que já publiquei, do mais novo pro mais antigo.</p>
+  </header>
+
+  <ol class="paperlist reveal">
     {%- for post in site.posts -%}
     {%- assign rt = post.read_min | default: 8 -%}
     <li>
@@ -13,6 +18,7 @@ permalink: /papers/
         <div class="idx">{{ forloop.index | prepend: '0' | slice: -2, 2 }}</div>
         <div class="title">
           <a class="title-link" href="{{ post.url | relative_url }}">{{ post.title }}</a>
+          {%- if post.rich %}<span class="rich-badge">interativo</span>{% endif %}
         </div>
         <div class="meta">
           <time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%Y-%m-%d" }}</time>
@@ -27,4 +33,4 @@ permalink: /papers/
     </li>
     {%- endfor -%}
   </ol>
-</section>
+</div>

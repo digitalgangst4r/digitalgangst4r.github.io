@@ -3,19 +3,15 @@ layout: default
 title: 404
 permalink: /404.html
 ---
-<section class="page">
-  <div class="banner" aria-hidden="true"><pre> _  _    ___  _  _
-| || |  / _ \| || |
-| || |_| | | | || |_
-|__   _| |_| |__   _|
-   |_|  \___/   |_| </pre></div>
-  <h1 style="margin-top:1rem">segment fault // rota não mapeada</h1>
-  <div class="post-content">
-    <p>O recurso não existe nesta partição. Talvez tenha sido movido, ou nunca
-    tenha sido montado.</p>
-    <p><span style="color:var(--accent-dim)">$</span>
-      <a href="{{ '/' | relative_url }}">cd /</a> <span class="slash">·</span>
-      <a href="{{ '/papers/' | relative_url }}">ls papers/</a>
-    </p>
-  </div>
-</section>
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">segfault // rota não mapeada</div>
+    <h1 style="font-size:clamp(3rem,14vw,7rem)">404</h1>
+    <p class="lede">O recurso não existe nesta partição. Talvez tenha sido
+    movido, ou nunca tenha sido montado.</p>
+    <div class="creed">
+      <span><a href="{{ '/' | relative_url }}" style="border:0">cd /</a></span>
+      <span><a href="{{ '/papers/' | relative_url }}" style="border:0">ls papers/</a></span>
+    </div>
+  </header>
+</div>
