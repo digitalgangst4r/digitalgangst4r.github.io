@@ -36,6 +36,26 @@
 
   <script>
   (function(){
+    var LKEY='t1m3-lang';
+    var btn=document.getElementById('langToggle'), lbl=document.getElementById('langLabel');
+    function cur(){try{return localStorage.getItem(LKEY)==='en'?'en':'pt';}catch(e){return 'pt';}}
+    function apply(l){
+      var nodes=document.querySelectorAll('[data-en]');
+      for(var i=0;i<nodes.length;i++){ var el=nodes[i];
+        if(el.getAttribute('data-pt')===null){ el.setAttribute('data-pt', el.innerHTML); }
+        el.innerHTML = (l==='en') ? el.getAttribute('data-en') : el.getAttribute('data-pt');
+      }
+      document.documentElement.lang = (l==='en') ? 'en' : 'pt-BR';
+      if(lbl) lbl.textContent = (l==='en') ? 'EN' : 'PT';
+      try{ if(l==='en'){localStorage.setItem(LKEY,'en');} else {localStorage.removeItem(LKEY);} }catch(e){}
+    }
+    apply(cur());
+    if(btn){ btn.addEventListener('click', function(){ apply(cur()==='en'?'pt':'en'); }); }
+  })();
+  </script>
+
+  <script>
+  (function(){
     var els=document.querySelectorAll('.reveal'); if(!els.length) return;
     if(!('IntersectionObserver' in window)){ els.forEach(function(e){e.classList.add('in');}); return; }
     var io=new IntersectionObserver(function(en){en.forEach(function(x){ if(x.isIntersecting){x.target.classList.add('in'); io.unobserve(x.target);} });},{rootMargin:'0px 0px -8% 0px'});

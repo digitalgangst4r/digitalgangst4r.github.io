@@ -5,16 +5,14 @@ permalink: /pgp/
 description: "Chave pública PGP do t1m3 pra report e disclosure."
 ---
 
-Minha chave pública. Usa pra me mandar report, tratar disclosure, ou conferir
-que fui eu que assinei. Se envolve alvo que ainda não saiu, **cifra**. E confere
-o fingerprint por outro canal antes de confiar nela.
+<p data-en="My public key. Use it to send me a report, handle disclosure, or check that I signed something. If it involves a target that isn&#x27;t public yet, &lt;b&gt;encrypt it&lt;/b&gt;. And verify the fingerprint over a second channel before trusting it.">Minha chave pública. Usa pra me mandar report, tratar disclosure, ou conferir que fui eu que assinei. Se envolve alvo que ainda não saiu, <b>cifra</b>. E confere o fingerprint por outro canal antes de confiar nela.</p>
 
 <div class="minis two">
   <div class="mini">
-    <div class="mh">identidade</div>
+    <div class="mh" data-en="identity">identidade</div>
     <ul>
       <li class="kv"><b>t1m3 (:p) &lt;t1m3@gatonet.club&gt;</b></li>
-      <li>rsa4096 · criada 2026-08-27 · [SC] + subchave [E]</li>
+      <li data-en="rsa4096 · created 2026-08-27 · [SC] + [E] subkey">rsa4096 · criada 2026-08-27 · [SC] + subchave [E]</li>
       <li>xmpp/omemo: <b>redstone@pwned.life</b></li>
     </ul>
   </div>
@@ -26,7 +24,7 @@ o fingerprint por outro canal antes de confiar nela.
   </div>
 </div>
 
-Importa direto:
+<p data-en="Import it:">Importa direto:</p>
 
 <pre class="keyblock">-----BEGIN PGP PUBLIC KEY BLOCK-----
 

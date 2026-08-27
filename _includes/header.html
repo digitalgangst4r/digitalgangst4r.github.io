@@ -11,6 +11,9 @@
       <a href="{{ '/about/' | relative_url }}"{% if u contains '/about' %} aria-current="page"{% endif %}>about</a>
     </nav>
     <span class="spacer"></span>
+    <button class="tgl" id="langToggle" type="button" aria-label="idioma / language" title="português / english">
+      <span aria-hidden="true">⇄</span><b id="langLabel">PT</b>
+    </button>
     <button class="tgl" id="themeToggle" type="button" aria-label="alternar tema" title="alternar tema">
       <span id="themeIcon">◑</span><b id="themeLabel">auto</b>
     </button>
