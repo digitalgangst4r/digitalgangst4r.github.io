@@ -133,6 +133,7 @@ nav.mainnav a:hover .b { color: var(--accent-dim); }
   font-family: var(--mono); color: var(--fg-dim); font-size: .82rem;
   letter-spacing: .02em; margin: .35rem 0 0;
 }
+.slash { color: var(--border-hi); margin: 0 .45rem; white-space: nowrap; }
 .cursor {
   display: inline-block; width: .62ch; height: 1.05em;
   background: var(--accent); vertical-align: -0.16em; margin-left: .2ch;
