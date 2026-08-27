@@ -7,18 +7,16 @@ layout: default
   {%- assign words = content | number_of_words -%}
   {%- assign rt = words | divided_by: 200 | plus: 1 -%}
 {%- endif -%}
-<article class="post reveal">
+<article class="post">
   <div class="wrap narrow">
-    <div class="post-nav"><a href="{{ '/papers/' | relative_url }}">‹ papers</a></div>
+    <div class="post-nav"><a href="{{ '/papers/' | relative_url }}" data-en="papers">papers</a></div>
     <header class="post-header">
       <div class="post-eyebrow">paper · {{ page.date | date: "%Y-%m-%d" }}</div>
       <h1>{{ page.title }}</h1>
       <div class="post-meta">
         ~{{ rt }} <span data-en="min read">min de leitura</span>
         {%- if page.tags and page.tags.size > 0 %}
-        <span class="sep">·</span><span class="post-tags">
-          {%- for t in page.tags -%}#{{ t }}{% unless forloop.last %} {% endunless %}{%- endfor -%}
-        </span>
+        <span class="sep">·</span><span class="post-tags">#{{ page.tags | join: " #" }}</span>
         {%- endif %}
       </div>
     </header>
